@@ -71,18 +71,31 @@ export async function loadIncidents() {
 }
 
 // The backend serves weather one hour at a time; keep a small per-hour cache.
-const weatherCache = new Map<number, WeatherGrid>();
+const weatherCache = new Map<number, { grid: WeatherGrid; loadedAt: number }>();
+let weatherRequest = 0;
 export async function loadWeather(force = false) {
   const hour = floorHour(validTimeOf(getState()));
-  if (getState().weather.origin === 'api' && !force) {
+  if (!remote) return load('weather', (p) => p.getWeather(hour));
+  const request = ++weatherRequest;
+  if (!force) {
     const cached = weatherCache.get(hour);
-    if (cached) return setState((s) => ({ weather: { ...s.weather, data: cached } }));
+    if (cached && Date.now() - cached.loadedAt < 60_000)
+      return setState({ weather: { state: 'ready', data: cached.grid, origin: 'api', error: null, at: cached.loadedAt } });
   }
-  await load('weather', (p) => p.getWeather(hour));
-  const s = getState();
-  if (s.weather.origin === 'api' && s.weather.data) {
-    weatherCache.set(hour, s.weather.data);
+  const previous = getState().weather;
+  setState({ weather: { ...previous, state: 'loading', error: null } });
+  try {
+    const data = await remote.getWeather(hour);
+    if (request !== weatherRequest || floorHour(validTimeOf(getState())) !== hour) return;
+    const at = Date.now();
+    const stale = data.metadata.cache_status === 'stale';
+    setState({ weather: { state: 'ready', data, origin: 'api', error: stale ? 'Showing stale forecast weather' : null, at } });
+    if (!stale) weatherCache.set(hour, { grid: data, loadedAt: at });
     if (weatherCache.size > 24) weatherCache.delete(weatherCache.keys().next().value!);
+  } catch (error) {
+    if (request !== weatherRequest || floorHour(validTimeOf(getState())) !== hour) return;
+    // Keep labeled last-good data; lookups reject it outside its exact valid hour.
+    setState({ weather: { ...previous, state: 'error', origin: 'api', error: errMsg(error) } });
   }
 }
 
@@ -145,7 +158,6 @@ export function startData() {
     useStore.subscribe(
       (s) => floorHour(validTimeOf(s)),
       () => {
-        if (getState().weather.origin !== 'api') return;
         clearTimeout(timer);
         timer = window.setTimeout(() => void loadWeather(), getState().playing ? 600 : 150);
       },
@@ -169,6 +181,7 @@ export function startData() {
   setInterval(() => setState({ now: Date.now() }), 30_000);
   setInterval(() => document.visibilityState === 'visible' && loadFires(), POLL_FIRES_MS);
   if (remote) setInterval(() => document.visibilityState === 'visible' && checkStatus(), POLL_STATUS_MS);
+  if (remote) setInterval(() => document.visibilityState === 'visible' && loadWeather(), 60_000);
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;

@@ -87,8 +87,9 @@ export function useExplanation(cellId: string | null, t: number) {
 }
 
 export function Conditions({ ex, weather, units }: { ex: Explanation | null; weather: PointWeather | null; units: Units }) {
+  const dataset = useStore((s) => s.weather);
   const c = ex?.conditions ?? {};
-  const w = { ...(weather ?? {}), ...c } as Explanation['conditions'];
+  const w = { ...c, ...(weather ?? {}) } as Explanation['conditions'];
   const fuel = c.fuel_type ? (FUEL_CLASSES[c.fuel_type]?.label ?? c.fuel_type) : null;
   const rows: [ReactNode, ReactNode][] = [
     ['Temperature', formatTemp(w.temperature_c, units)],
@@ -112,8 +113,11 @@ export function Conditions({ ex, weather, units }: { ex: Explanation | null; wea
   if (fuel) rows.push(['Vegetation / fuel', fuel]);
   if (c.elevation_m != null) rows.push(['Elevation', formatElevation(c.elevation_m, units)]);
   if (c.slope_deg != null) rows.push(['Slope', `${c.slope_deg.toFixed(0)}°`]);
-  if (!ex && !weather) return <Note>Weather and environment data aren’t available for this hour.</Note>;
-  return <Stats rows={rows} />;
+  if (!ex && !weather) return <Note>{dataset.state === 'loading' ? 'Loading forecast weather…' : 'Forecast weather is unavailable for this hour.'}{dataset.error ? ` ${dataset.error}` : ''}</Note>;
+  return <>
+    {weather && <Note>{weather.source ?? (dataset.origin === 'api' ? 'Weather API' : 'Sample weather')} · forecast{weather.fetched_at ? ` · fetched ${relativeTime(Date.parse(weather.fetched_at))}` : ''}{weather.cache_status === 'stale' || dataset.error ? ' · stale' : ''}{dataset.state === 'loading' ? ' · refreshing' : ''}</Note>}
+    <Stats rows={rows} />
+  </>;
 }
 
 /** One-sentence, plain-English reading of the top contributions. */

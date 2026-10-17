@@ -171,9 +171,11 @@ export class RemoteProvider implements DataProvider {
   async getWeather(validAtMs = Date.now()): Promise<WeatherGrid> {
     const hour = floorHour(validAtMs);
     const res = await fetchJson<FeatureCollection<Point> & { metadata?: Props }>(this.url('/wind', { bbox: CA_BBOX, hour: toIso(hour), density: 'medium' }), {
-      timeoutMs: 20_000,
+      timeoutMs: 30_000,
     });
+    if (Date.parse(String(res.metadata?.forecast_hour)) !== hour) throw new Error('Weather response hour does not match the selected hour');
     const feats = (res.features ?? []).filter((f) => f.geometry?.type === 'Point');
+    if (!feats.length) throw new Error('No weather forecast samples for this hour');
     const n = feats.length;
     const col = (...keys: string[]) => Float32Array.from(feats, (f) => num(pick((f.properties ?? {}) as Props, ...keys)) ?? NaN);
     const speedMs = col('wind_speed_ms', 'speed_ms');
@@ -181,7 +183,11 @@ export class RemoteProvider implements DataProvider {
     for (let i = 0; i < n; i++) if (!Number.isFinite(speedKmh[i]) && Number.isFinite(speedMs[i])) speedKmh[i] = speedMs[i] * 3.6;
     return {
       metadata: {
-        generated_at: str(pick(res.metadata ?? {}, 'issued_at', 'generated_at')) ?? toIso(Date.now()),
+        generated_at: str(pick(res.metadata ?? {}, 'fetched_at', 'generated_at')) ?? '',
+        fetched_at: str(res.metadata?.fetched_at) ?? undefined,
+        cache_status: res.metadata?.cache_status === 'stale' ? 'stale' : 'fresh',
+        complete: res.metadata?.complete !== false,
+        data_kind: 'forecast',
         source: str(res.metadata?.source) ?? 'FireWatch API (weather provider)',
         forecast_start: toIso(hour),
         step_minutes: 60,
