@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     repo_root: Path = REPO_ROOT
     shared_data_dir: Path = Path("shared/data")
+    locations_data_dir: Path = Path("frontend/public/data")
     sqlite_path: Path = Path("shared/data/firewatch.sqlite3")
     cors_origins: list[str] = Field(default_factory=list)
     firms_map_key: SecretStr | None = Field(default=None, repr=False)
@@ -141,7 +142,7 @@ class Settings(BaseSettings):
             raise ValueError("Backend jobs require explicit scheduler_owner=backend")
         if self.firms_default_limit > self.firms_max_limit:
             raise ValueError("FIRMS default limit exceeds maximum")
-        for name in ("shared_data_dir", "sqlite_path", "firms_boundary_path"):
+        for name in ("shared_data_dir", "sqlite_path", "firms_boundary_path", "locations_data_dir"):
             value = getattr(self, name)
             if not value.is_absolute():
                 value = self.repo_root / value
