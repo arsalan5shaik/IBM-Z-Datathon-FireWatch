@@ -1,0 +1,67 @@
+import logging
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
+
+from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException
+
+from app.api.v1.status import health_router, router
+from app.config import Settings
+from app.errors import (
+    RequestContextMiddleware,
+    RestrictedCORSMiddleware,
+    SafeErrorsMiddleware,
+    http_error,
+    validation_error,
+)
+from app.schemas.errors import ERROR_RESPONSES
+from app.schemas.status import RuntimeState
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings if settings is not None else Settings()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        logger = logging.getLogger("firewatch")
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter("%(message)s"))
+            logger.addHandler(handler)
+        logger.setLevel(settings.log_level)
+        app.state.runtime.started_at = datetime.now(UTC)
+        app.state.runtime.ready = True
+        try:
+            yield
+        finally:
+            app.state.runtime.ready = False
+
+    app = FastAPI(
+        title="FireWatch API",
+        version="0.1.0",
+        description=(
+            "California wildfire intelligence. Experimental risk is distinct from satellite "
+            "observations and official incidents. Foundation serves operational status only; "
+            "no forecast or live provider data is available yet."
+        ),
+        lifespan=lifespan,
+        responses=ERROR_RESPONSES,
+    )
+    app.state.settings = settings
+    app.state.runtime = RuntimeState()
+    app.add_exception_handler(HTTPException, http_error)
+    app.add_exception_handler(RequestValidationError, validation_error)
+    app.add_middleware(SafeErrorsMiddleware)
+    app.add_middleware(
+        RestrictedCORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+        expose_headers=["X-Request-ID"],
+    )
+    app.add_middleware(RequestContextMiddleware)
+    app.include_router(router)
+    app.include_router(health_router)
+    return app

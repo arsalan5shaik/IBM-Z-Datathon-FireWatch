@@ -1,0 +1,80 @@
+"""Validated configuration, independent of the launch directory."""
+
+from pathlib import Path
+from typing import Literal
+from urllib.parse import urlsplit
+
+from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=REPO_ROOT / "backend" / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        hide_input_in_errors=True,
+        frozen=True,
+    )
+
+    repo_root: Path = REPO_ROOT
+    shared_data_dir: Path = Path("shared/data")
+    sqlite_path: Path = Path("shared/data/firewatch.sqlite3")
+    cors_origins: list[str] = Field(default_factory=list)
+    firms_map_key: SecretStr | None = Field(default=None, repr=False)
+    llm_api_key: SecretStr | None = Field(default=None, repr=False)
+    weather_provider: Literal["open-meteo"] = "open-meteo"
+    forecast_hours: Literal[168] = 168
+    grid_resolution_m: Literal[3000] = 3000
+    # Foundation cannot safely enable a scheduler or invoke a generator.
+    job_enabled: Literal[False] = False
+    forecast_generator_cmd: SecretStr | None = Field(default=None, repr=False)
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    request_timeout_seconds: float = Field(default=10, ge=0.1, le=60)
+    cache_max_entries: int = Field(default=128, ge=1, le=10000)
+    provider_max_retries: int = Field(default=2, ge=0, le=5)
+    firms_refresh_minutes: int = Field(default=15, ge=10, le=1440)
+    weather_refresh_minutes: int = Field(default=60, ge=15, le=1440)
+
+    @field_validator("repo_root")
+    @classmethod
+    def absolute_root(cls, value: Path) -> Path:
+        if not value.is_absolute():
+            raise ValueError("REPO_ROOT must be absolute")
+        return value.resolve()
+
+    @field_validator("cors_origins")
+    @classmethod
+    def explicit_origins(cls, values: list[str]) -> list[str]:
+        for value in values:
+            parsed = urlsplit(value)
+            try:
+                _ = parsed.port  # Access validates the optional port.
+            except ValueError as exc:
+                raise ValueError("CORS origins require a valid port") from exc
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.hostname
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.path
+                or parsed.query
+                or parsed.fragment
+                or value != f"{parsed.scheme}://{parsed.netloc}"
+                or parsed.netloc.endswith(":")
+                or "*" in value
+                or any(char.isspace() for char in value)
+            ):
+                raise ValueError("CORS origins must be explicit HTTP(S) origins without a path")
+        return list(dict.fromkeys(values))
+
+    @model_validator(mode="after")
+    def resolve_paths(self) -> "Settings":
+        for name in ("shared_data_dir", "sqlite_path"):
+            value = getattr(self, name)
+            if not value.is_absolute():
+                value = self.repo_root / value
+            object.__setattr__(self, name, value.resolve())
+        return self
