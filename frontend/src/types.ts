@@ -230,6 +230,25 @@ export interface ChatResponse {
   grounding: Grounding[];
   location_id?: string | null;
   disclaimer?: string;
+  sources?: ChatSource[];
+  limitations?: string[];
+  suggested_questions?: string[];
+  location?: PlaceResult | null;
+  requested_time?: string | null;
+  model?: string | null;
+}
+
+export interface ChatSource {
+  id: string;
+  kind: 'firewatch' | 'research';
+  title: string;
+  provider: string;
+  url: string | null;
+  retrieved_at: string;
+  published_at?: string | null;
+  valid_at?: string | null;
+  freshness?: string | null;
+  scope?: string | null;
 }
 
 // ---- UI ------------------------------------------------------------------------

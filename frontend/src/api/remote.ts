@@ -273,21 +273,26 @@ export class RemoteProvider implements DataProvider {
     };
   }
 
-  async chat(req: ChatRequest): Promise<ChatResponse> {
-    // Architecture §7: {message, context?: {cell_id, place_id, hour, incident_id}}
-    const context = Object.fromEntries(
-      Object.entries({ cell_id: req.cell_id, place_id: req.location_id, hour: req.valid_at, incident_id: req.incident_id }).filter(([, v]) => v),
-    );
+  async chat(req: ChatRequest, signal?: AbortSignal): Promise<ChatResponse> {
     const res = await fetchJson<Props>(this.url('/chat'), {
       method: 'POST',
-      body: { message: req.message, ...(Object.keys(context).length ? { context } : {}) },
-      timeoutMs: 30_000,
+      body: { message: req.message, location_id: req.location_id ?? null,
+        selected_hour: req.valid_at ?? null, history: req.conversation },
+      timeoutMs: 95_000,
+      signal,
     });
     const cites = (pick(res, 'grounding', 'citations', 'sources') as Props[] | undefined) ?? [];
+    if (typeof res.answer !== 'string' || res.answer.length > 16000) throw new Error('Invalid chat answer');
     return {
       answer: String(pick(res, 'answer', 'message', 'text') ?? ''),
       grounding: cites.map((c) => ({ dataset: String(pick(c, 'dataset', 'source', 'name', 'tool') ?? 'source'), as_of: str(pick(c, 'as_of', 'timestamp', 'observed_at', 'valid_at')) })),
       disclaimer: str(res.disclaimer) ?? undefined,
+      sources: Array.isArray(res.sources) ? res.sources as ChatResponse['sources'] : [],
+      limitations: Array.isArray(res.limitations) ? res.limitations.filter((v): v is string => typeof v === 'string') : [],
+      suggested_questions: Array.isArray(res.suggested_questions) ? res.suggested_questions.filter((v): v is string => typeof v === 'string').slice(0, 4) : [],
+      location: res.location as ChatResponse['location'],
+      requested_time: str(res.requested_time),
+      model: str(res.model),
     };
   }
 

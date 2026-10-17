@@ -90,7 +90,7 @@ export const POLL_FIRES_MS = 5 * 60_000;
 /** A snapshot older than this is shown as stale. */
 export const STALE_AFTER_MS = 6 * 3600_000;
 
-export const CHAT_MAX_CHARS = 600;
+export const CHAT_MAX_CHARS = 2000;
 export const CHAT_MAX_TURNS_SENT = 10;
 
 /** Official sources the UI and assistant point to for safety decisions. */

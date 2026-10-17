@@ -85,7 +85,7 @@ export function Note({ children, tone = 'muted' }: { children: ReactNode; tone?:
 }
 
 /** Tiny, safe markdown subset for assistant replies: **bold**, _italic_, [link](https://…), "• " bullets. */
-export function Markdown({ text }: { text: string }) {
+export function Markdown({ text, allowedLinks }: { text: string; allowedLinks?: string[] }) {
   const inline = (s: string, key: string): ReactNode[] => {
     const out: ReactNode[] = [];
     const re = /\*\*(.+?)\*\*|_(.+?)_|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
@@ -96,6 +96,7 @@ export function Markdown({ text }: { text: string }) {
       if (m.index > last) out.push(s.slice(last, m.index));
       if (m[1]) out.push(<strong key={`${key}-${i++}`}>{m[1]}</strong>);
       else if (m[2]) out.push(<em key={`${key}-${i++}`}>{m[2]}</em>);
+      else if (allowedLinks && !allowedLinks.includes(m[4])) out.push(m[3]);
       else
         out.push(
           <a key={`${key}-${i++}`} href={m[4]} target="_blank" rel="noopener noreferrer">

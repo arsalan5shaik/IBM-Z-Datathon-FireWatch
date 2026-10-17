@@ -212,6 +212,7 @@ choosing an unsupported conclusion. No hidden reasoning belongs in the answer.
         if not final.within_scope:
             return ChatResponse(answer=REFUSAL, mode="scope_refusal")
         answer = final.answer
+        generated_text = json.dumps(final.model_dump())
         if any(key not in tools.sources for key in final.source_ids):
             raise APIError("chat_citation_invalid", "AI cited an unverified source", 502)
         cited = set(final.source_ids)
@@ -224,8 +225,8 @@ choosing an unsupported conclusion. No hidden reasoning belongs in the answer.
                 raise APIError("chat_citation_invalid", "AI returned an unverified URL", 502)
         secret = self.client.key.get_secret_value() if self.client.key else None
         if (
-            (secret and secret in answer)
-            or re.search(r"sk-[A-Za-z0-9_-]{12,}|BEGIN .*PRIVATE KEY", answer)
+            (secret and secret in generated_text)
+            or re.search(r"sk-[A-Za-z0-9_-]{12,}|BEGIN .*PRIVATE KEY", generated_text)
             or any(
                 line in answer for line in FIREWATCH_SYSTEM_PROMPT.splitlines() if len(line) > 100
             )
@@ -263,7 +264,7 @@ choosing an unsupported conclusion. No hidden reasoning belongs in the answer.
             # Fail closed on invented numeric facts: all numbers must occur in cited
             # server evidence, never in client history or the model's memory.
             evidence = json.dumps([tools.evidence[key] for key in cited if key in tools.evidence])
-            if not research_sources:
+            if not any(source.id in cited for source in research_sources):
                 for number in re.findall(
                     r"(?<![A-Za-z])\d+(?:\.\d+)?", re.sub(r"\[(?:fw|research)-[^\]]+\]", "", answer)
                 ):
@@ -293,7 +294,7 @@ choosing an unsupported conclusion. No hidden reasoning belongs in the answer.
                     label = re.sub(r"[\[\]()\\]", "", source.title)[:100]
                     answer = answer.replace(f"[{source.id}]", f"[{label}]({source.url})")
         limitations = list(dict.fromkeys(tools.limitations + final.limitations))[:20]
-        return ChatResponse(
+        reply = ChatResponse(
             answer=answer,
             sources=list(tools.sources.values()),
             tools_used=tools.used,
@@ -301,10 +302,13 @@ choosing an unsupported conclusion. No hidden reasoning belongs in the answer.
             requested_time=iso(tools.hour),
             limitations=limitations,
             data_freshness={source.id: source.freshness for source in tools.sources.values()},
-            suggested_questions=[q[:160] for q in final.suggested_questions],
+            suggested_questions=[q[:160] for q in final.suggested_questions if SCOPE.search(q)],
             model=self.settings.openai_model,
             grounding=[
                 {"dataset": source.provider, "as_of": source.valid_at or source.retrieved_at}
                 for source in tools.sources.values()
             ],
         )
+        if len(reply.model_dump_json().encode()) > 64000:
+            raise APIError("chat_output_limit", "Chat response exceeds its size budget", 502)
+        return reply

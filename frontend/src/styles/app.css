@@ -2648,3 +2648,12 @@ code {
     border: 1px solid CanvasText;
   }
 }
+/* FireWatch assistant: source metadata remains readable in the existing drawer. */
+.msg__context { font-size: 10px; color: var(--muted, #68717d); margin: 3px 0; overflow-wrap: anywhere; }
+.msg__source-details { font-size: 11px; margin-top: 7px; overflow-wrap: anywhere; }
+.msg__source-details summary { cursor: pointer; font-weight: 600; }
+.msg__source-details ul, .msg__limitations { padding-left: 18px; margin: 6px 0; }
+.msg__source-details li { margin-bottom: 10px; }
+.chat-source-kind { font-weight: 600; }
+.msg__limitations { font-size: 11px; }
+.msg__bubble { overflow-wrap: anywhere; }

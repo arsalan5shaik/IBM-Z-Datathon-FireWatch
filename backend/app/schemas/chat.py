@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -106,6 +106,6 @@ class ResearchArgs(StrictModel):
 class FinalAnswer(StrictModel):
     within_scope: bool
     answer: str = Field(min_length=1, max_length=12000)
-    source_ids: list[str] = Field(max_length=30)
-    limitations: list[str] = Field(max_length=10)
-    suggested_questions: list[str] = Field(max_length=4)
+    source_ids: list[Annotated[str, Field(max_length=80)]] = Field(max_length=30)
+    limitations: list[Annotated[str, Field(max_length=1000)]] = Field(max_length=10)
+    suggested_questions: list[Annotated[str, Field(max_length=200)]] = Field(max_length=4)

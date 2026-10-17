@@ -184,12 +184,15 @@ class ChatTools:
             self.research_calls += 1
             try:
                 result = await research(self.client, args.query, self.now, self.emergency)
+                registered = []
                 for item in result["sources"]:
                     source = ChatSource.model_validate(item)
                     source.id = f"research-{self.research_calls}-{source.id}"
                     self.sources[source.id] = source
+                    registered.append(source.model_dump())
                 return result | {
-                    "source_ids": [s.id for s in self.sources.values() if s.kind == "research"]
+                    "sources": registered,
+                    "source_ids": [s.id for s in self.sources.values() if s.kind == "research"],
                 }
             except APIError as error:
                 self.limitations.append(
