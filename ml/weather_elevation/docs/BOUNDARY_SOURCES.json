@@ -1,0 +1,19 @@
+{
+  "catalog_url": "https://data.ca.gov/dataset/ca-geographic-boundaries",
+  "boundary_vintage": "2023 MAF/TIGER; boundaries effective 2023-01-01 per catalog",
+  "rights": "No Restrictions on Public Use (catalog)",
+  "resources": {
+    "state": {
+      "url": "https://publish.data.ca.gov/dataset/e212e397-1277-4df3-8c22-40721b095f33/resource/3db1e426-fb51-44f5-82d5-a54d7c6e188b/download/ca_state.zip",
+      "sha256": "0108383e381fd99ee9901043ecf081f7e397b36d6a20941706c27f5bab4eaa8b",
+      "bytes": 136046,
+      "file": "state.zip"
+    },
+    "counties": {
+      "url": "https://publish.data.ca.gov/dataset/e212e397-1277-4df3-8c22-40721b095f33/resource/b0007416-a325-4777-9295-368ea6b710e6/download/ca_counties.zip",
+      "sha256": "fc46b64c67209b3a71f26f72493ac35763413f2e9acf01f3b2ebfc060a46000f",
+      "bytes": 2597712,
+      "file": "counties.zip"
+    }
+  }
+}
