@@ -303,3 +303,13 @@ def test_changed_boundary_with_outage_retains_old_observations(settings):
     result = cache.query(CA_BBOX, NOW - timedelta(hours=24), 10, now=later)
     assert len(result.features) == 1
     assert result.metadata["partial_boundary_coverage"] and result.metadata["stale"]
+
+
+def test_actual_success_timestamp_is_completion_not_acquisition(settings):
+    cache = FireCache(settings)
+    before = datetime.now(UTC)
+    asyncio.run(cache.refresh(client=Provider([observation()])))
+    after = datetime.now(UTC)
+    snapshot = cache.read().sources[S20]
+    assert before <= snapshot.last_attempt <= snapshot.fetched_at <= after
+    assert snapshot.records[0].acquired_at == NOW

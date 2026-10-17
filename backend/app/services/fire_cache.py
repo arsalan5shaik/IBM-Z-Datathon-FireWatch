@@ -80,6 +80,7 @@ class FireCache:
 
     async def refresh(self, *, now=None, client=None, force=False):
         """Independently callable job; does not start a second forecast scheduler."""
+        fixed_clock = now is not None
         now = now or datetime.now(UTC)
         if now.tzinfo is None or now.utcoffset() is None:
             raise ValueError("Refresh time must be UTC-aware")
@@ -142,7 +143,7 @@ class FireCache:
                         return source, SourceSnapshot(
                             boundary_filter=label,
                             last_attempt=now,
-                            fetched_at=now,
+                            fetched_at=now if fixed_clock else datetime.now(UTC),
                             coverage_start=start,
                             records=records,
                             **counts,

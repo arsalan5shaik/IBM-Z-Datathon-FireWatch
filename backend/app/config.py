@@ -75,11 +75,12 @@ class Settings(BaseSettings):
         if (
             parsed.scheme != "https"
             or not parsed.hostname
-            or parsed.username
-            or parsed.password
+            or parsed.username is not None
+            or parsed.password is not None
             or parsed.query
             or parsed.fragment
             or not parsed.path.endswith("/api/area/csv")
+            or value != f"https://{parsed.netloc}{parsed.path}"
             or any(char.isspace() for char in value)
         ):
             raise ValueError(

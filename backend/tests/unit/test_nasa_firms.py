@@ -226,3 +226,17 @@ def test_retry_budget_exhaustion_and_http_date_retry_after(settings):
     with pytest.raises(ProviderError, match="rate_limited"):
         run_fetch(settings, handler, sleep=sleep)
     assert len(calls) == 3 and delays == [2, 2]
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://example.com/api/area/csv?",
+        "https://example.com/api/area/csv#",
+        "https://@example.com/api/area/csv",
+        "https://example.com:99999/api/area/csv",
+    ],
+)
+def test_base_url_rejects_empty_query_fragment_and_userinfo(url):
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, firms_base_url=url)
