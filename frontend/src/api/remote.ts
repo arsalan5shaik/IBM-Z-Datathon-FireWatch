@@ -1,8 +1,7 @@
 /**
- * FireWatch backend client — routes from FireWatch_Backend_Architecture.md §7 (prefix /api/v1).
- * Implemented in backend/ today: /status, /forecasts/risk, /forecasts/cell/{id}.
- * Planned routes (/fires/live, /fires/incidents, /wind, /explain, /chat) are parsed leniently;
- * a 404 from a route that doesn't exist yet makes that dataset fall back to labelled sample data.
+ * FireWatch backend client — routes from FireWatch_Backend_Architecture.md §7.
+ * NASA FIRMS and weather are implemented; forecast routes require validated artifacts.
+ * Configured API outages never substitute sample observations or model predictions.
  * See frontend/API_INTEGRATION.md.
  */
 import type { FeatureCollection, MultiPolygon, Point, Polygon } from 'geojson';
@@ -13,7 +12,6 @@ import type {
   ChatRequest,
   ChatResponse,
   CoverageCollection,
-  Detection,
   Driver,
   Explanation,
   FiresSnapshot,
@@ -24,8 +22,9 @@ import type {
   WeatherGrid,
 } from '../types';
 import type { DataProvider } from './provider';
-import { ForecastTiles } from './forecastTiles';
+import { apiRiskScore, ForecastTiles } from './forecastTiles';
 import { HttpError, fetchJson } from './http';
+import { parseFires } from './fires';
 
 type Area = Polygon | MultiPolygon;
 type Props = Record<string, unknown>;
@@ -81,53 +80,31 @@ export class RemoteProvider implements DataProvider {
    */
   async getRisk(): Promise<RiskGrid> {
     let start = Math.ceil(Date.now() / HOUR_MS) * HOUR_MS; // backend window starts at the next UTC hour
+    let publishedHours: string[] = [];
     try {
       const status = await this.getStatus();
       const ws = str(status.forecast?.active_window_start);
       if (ws) start = Date.parse(ws);
+      const end = str(status.forecast?.active_window_end_exclusive);
+      if (ws && end && status.forecast?.valid_hour_count === 168 && status.forecast?.missing_hour_count === 0 && Date.parse(end) - start === 168 * HOUR_MS)
+        publishedHours = Array.from({ length: 168 }, (_, i) => toIso(start + i * HOUR_MS));
     } catch {
       /* status is advisory here */
     }
     this.tiles ??= new ForecastTiles(this.base, start, (g) => this.onRiskChange(g));
+    this.tiles.alignWindow(start);
+    this.tiles.publishedHours = publishedHours;
     await this.tiles.probe([-119.6, 37.3]);
-    return this.tiles.snapshot();
+    const grid = this.tiles.snapshot();
+    if (!grid.scores.some(Number.isFinite)) throw new HttpError('forecast_not_ready', 'No published model values are available for the requested area and hour', 503);
+    return grid;
   }
 
-  // ---- planned (lenient parsing) ------------------------------------------------------------
+  // ---- satellite observations and optional incident feed -----------------------------------
   async getFires(lookbackHours: number): Promise<FiresSnapshot> {
     const since = toIso(Date.now() - lookbackHours * HOUR_MS);
     const res = await fetchJson<FeatureCollection<Point> & { metadata?: Props }>(this.url('/fires/live', { bbox: CA_BBOX, since }));
-    const cutoff = Date.parse(since);
-    const detections: Detection[] = (res.features ?? [])
-      .filter((f) => f.geometry?.type === 'Point')
-      .map((f, i) => {
-        const p = (f.properties ?? {}) as Props;
-        const acquired = str(pick(p, 'acquired_at', 'acquisition_time', 'acq_datetime', 'observed_at', 'timestamp')) ?? '';
-        return {
-          id: String(f.id ?? pick(p, 'id', 'detection_id') ?? `det-${i}`),
-          lon: f.geometry.coordinates[0],
-          lat: f.geometry.coordinates[1],
-          acquired_at: acquired,
-          sensor: String(pick(p, 'sensor', 'satellite', 'source') ?? 'VIIRS'),
-          frp_mw: num(pick(p, 'frp_mw', 'frp')),
-          confidence: String(pick(p, 'confidence') ?? 'nominal'),
-          display_weight: num(p.display_weight) ?? 0.5,
-          daynight: (str(p.daynight) as 'D' | 'N' | null) ?? null,
-          incident_id: str(p.incident_id),
-        };
-      })
-      .filter((d) => !d.acquired_at || Date.parse(d.acquired_at) >= cutoff);
-    const md = res.metadata ?? {};
-    return {
-      metadata: {
-        source: str(md.source) ?? 'NASA FIRMS',
-        generated_at: str(pick(md, 'generated_at', 'fetched_at', 'last_success_at')) ?? toIso(Date.now()),
-        stale: md.stale === true,
-        not_fire_perimeter: true,
-        lookback_hours: lookbackHours,
-      },
-      detections,
-    };
+    return parseFires(res, lookbackHours);
   }
 
   async getIncidents(): Promise<IncidentsSnapshot> {
@@ -213,7 +190,8 @@ export class RemoteProvider implements DataProvider {
     const raw = await fetchJson<Props>(this.url(`/explain/${encodeURIComponent(cellId)}`, { hour: toIso(floorHour(validAtMs)) }));
     const list = (pick(raw, 'drivers', 'contributions', 'features', 'shap') as Props[] | undefined) ?? [];
     const drivers: Driver[] = list.map((d) => {
-      const c = num(pick(d, 'contribution_raw', 'contribution', 'shap_value', 'value_contribution')) ?? 0;
+      const c = num(pick(d, 'contribution_raw', 'contribution', 'shap_value', 'value_contribution'));
+      if (c === null) throw new HttpError('invalid_explanation', 'Model contribution was not supplied');
       const v = pick(d, 'value', 'feature_value', 'input_value');
       return {
         feature: String(pick(d, 'feature', 'name') ?? 'feature'),
@@ -224,9 +202,12 @@ export class RemoteProvider implements DataProvider {
         direction: c >= 0 ? 'increase' : 'decrease',
       };
     });
-    const base = num(pick(raw, 'base_value', 'expected_value')) ?? 0;
-    const rawScore = num(pick(raw, 'raw_score', 'margin')) ?? base + drivers.reduce((s, d) => s + d.contribution_raw, 0);
-    const score = num(raw.risk_score) ?? 1 / (1 + Math.exp(-rawScore));
+    const base = num(pick(raw, 'base_value', 'expected_value'));
+    const rawScore = num(pick(raw, 'raw_score', 'margin'));
+    const outputScale = str(raw.output_scale);
+    const score = apiRiskScore(num(raw.risk_score));
+    if (base === null || rawScore === null || !outputScale || !Number.isFinite(score))
+      throw new HttpError('invalid_explanation', 'Model explanation must declare scores, baseline and output scale');
     return {
       cell_id: cellId,
       valid_at: str(pick(raw, 'forecast_hour', 'valid_at')) ?? toIso(validAtMs),
@@ -236,7 +217,7 @@ export class RemoteProvider implements DataProvider {
       score_type: str(raw.score_type) ?? 'relative_risk',
       base_value: base,
       raw_score: rawScore,
-      output_scale: str(raw.output_scale) ?? 'log_odds',
+      output_scale: outputScale,
       drivers,
       conditions: ((pick(raw, 'conditions', 'inputs') as Explanation['conditions']) ?? {}) as Explanation['conditions'],
     };

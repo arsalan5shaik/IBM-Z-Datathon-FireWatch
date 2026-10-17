@@ -1,6 +1,6 @@
 /**
  * Loads every dataset, keeps it fresh, and decides where it comes from:
- *   backend configured → backend; if that fails and nothing was loaded yet → sample data ("fallback").
+ *   backend configured → backend; unavailable observations/forecasts stay explicitly unavailable.
  *   no backend → sample data.
  * A failed refresh keeps the last good data (shown as stale) instead of swapping to samples.
  */
@@ -36,7 +36,13 @@ async function load<K extends Key>(key: K, fetcher: (p: DataProvider) => Promise
     } catch (e) {
       remoteError = errMsg(e);
       if (prev.data && prev.origin === 'api') {
-        setState({ [key]: { ...prev, error: remoteError } } as Partial<AppState>);
+        const data = key === 'fires' ? { ...getState().fires.data!, metadata: { ...getState().fires.data!.metadata, stale: true, cache_status: 'stale' as const } } : prev.data;
+        setState({ [key]: { ...prev, data, error: remoteError } } as Partial<AppState>);
+        return;
+      }
+      if (key === 'fires' || key === 'risk' || key === 'status' || key === 'incidents') {
+        // A real-data outage must not turn into synthetic observations or predictions.
+        setState({ [key]: { state: 'error', data: null, origin: 'api', error: remoteError, at: Date.now() }, ...(key === 'risk' ? { isLive: true, playing: false } : {}) } as Partial<AppState>);
         return;
       }
     }
@@ -52,8 +58,8 @@ async function load<K extends Key>(key: K, fetcher: (p: DataProvider) => Promise
 }
 
 /** Provider that served the risk grid — explanations must come from the same model. */
-export const riskProvider = (): DataProvider => (getState().risk.origin === 'api' && remote ? remote : sample());
-const apiRisk = () => !!remote && getState().risk.origin === 'api';
+export const riskProvider = (): DataProvider => (remote ?? sample());
+const apiRisk = () => !!remote && getState().risk.origin === 'api' && getState().risk.state === 'ready' && !!getState().risk.data;
 
 export const loadStatus = () => load('status', (p) => p.getStatus());
 export const loadFires = () => load('fires', (p) => p.getFires(48));
@@ -62,7 +68,7 @@ export const loadRisk = () => load('risk', (p) => p.getRisk());
 
 /** Sample incidents only make sense next to sample detections; live detections never get fictional names. */
 export async function loadIncidents() {
-  if (remote && getState().fires.origin !== 'api') {
+  if (!remote && getState().fires.origin !== 'api') {
     const data = await sample().getIncidents();
     setState({ incidents: { state: 'ready', data, origin: 'fallback', error: null, at: Date.now() } });
     return;
@@ -151,7 +157,7 @@ export function startData() {
   if (remote) {
     // Sparse backend grid updates as tiles arrive.
     remote.onRiskChange = (grid) => {
-      if (getState().risk.origin === 'api') setState((s) => ({ risk: { ...s.risk, data: grid, at: Date.now() } }));
+      if (getState().risk.origin === 'api' && getState().risk.state === 'ready') setState((s) => ({ risk: { ...s.risk, data: grid, at: Date.now() } }));
     };
     // Backend weather is per hour: follow the timeline (debounced so playback doesn't flood the API).
     let timer = 0;

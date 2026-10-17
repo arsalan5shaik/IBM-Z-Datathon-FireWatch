@@ -8,7 +8,7 @@ export type BasemapStyle = 'default' | 'terrain';
 export type ViewMode = '2d' | '3d';
 export type LayerKey = 'fires' | 'risk' | 'wind' | 'weather' | 'vegetation' | 'perimeters';
 export type Units = 'us' | 'metric';
-export type RiskLevelKey = 'low' | 'elevated' | 'high' | 'very_high' | 'extreme';
+export type RiskLevelKey = 'low' | 'elevated' | 'high' | 'very_high' | 'extreme' | 'unclassified';
 /** Where a dataset came from: the backend, built-in sample data, or sample data because the backend failed. */
 export type DataOrigin = 'api' | 'sample' | 'fallback';
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error';
@@ -52,6 +52,20 @@ export interface FiresMetadata {
   observation_type?: string;
   not_fire_perimeter?: boolean;
   lookback_hours?: number;
+  cache_status?: 'fresh' | 'stale' | 'unavailable' | 'unknown';
+  last_successful_refresh?: string | null;
+  last_attempted_refresh?: string | null;
+  observation_start?: string | null;
+  observation_end?: string | null;
+  cache_age_seconds?: number | null;
+  returned_count?: number;
+  matched_count?: number;
+  truncated?: boolean;
+  partial_sources?: boolean;
+  partial_boundary_coverage?: boolean;
+  partial_time_coverage?: boolean;
+  partial_observations?: boolean;
+  refresh_errors?: Record<string, string | null>;
 }
 export interface FiresSnapshot {
   metadata: FiresMetadata;
@@ -119,6 +133,8 @@ export interface RiskMetadata {
    * summaries are unavailable.
    */
   sparse?: boolean;
+  /** Frontend availability derived from validated status or received hourly scores. */
+  available_hours?: string[];
   grid_version?: string;
   published_at?: string;
 }

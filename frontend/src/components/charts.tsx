@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { FUEL_CLASSES } from '../config';
+import { API_BASE, FUEL_CLASSES } from '../config';
 import { riskLabel, riskLevelKey, scoreValue } from '../lib/risk';
 import { HOUR_MS, daySegments, formatHour, formatWeekday } from '../lib/time';
 import { formatSpeed, formatTemp } from '../lib/format';
@@ -95,13 +95,13 @@ export function RiskSparkline({
             <line key={d.key} x1={x(d.startIndex)} x2={x(d.startIndex)} y1="0" y2={H} className="spark__day" vectorEffect="non-scaling-stroke" />
           ))}
           <path d={areaPath} className="spark__area" />
-          <path d={linePath} className="spark__line" stroke="url(#spark-stroke)" vectorEffect="non-scaling-stroke" />
+          <path d={linePath} className="spark__line" stroke={API_BASE ? '#64748b' : 'url(#spark-stroke)'} vectorEffect="non-scaling-stroke" />
         </svg>
         <span className="spark__gridlabel" style={{ top: `${y(0.8)}%` }}>
-          Extreme
+          {API_BASE ? '80 / 100' : 'Extreme'}
         </span>
         <span className="spark__gridlabel" style={{ top: `${y(0.4)}%` }}>
-          High
+          {API_BASE ? '40 / 100' : 'High'}
         </span>
         <span className="spark__cursor" style={{ left: pct(shown) }} />
         {Number.isFinite(v) && <span className="spark__dot" style={{ left: pct(shown), top: `${y(v)}%` }} />}
@@ -148,7 +148,7 @@ function driverValue(d: Driver, units: Units): string {
 }
 
 /** Diverging SHAP-style contribution bars: red raises risk, blue lowers it, zero baseline in the middle. */
-export function ShapBars({ drivers, units, max = 8 }: { drivers: Driver[]; units: Units; max?: number }) {
+export function ShapBars({ drivers, units, max = 8, outputScale = 'unknown' }: { drivers: Driver[]; units: Units; max?: number; outputScale?: string }) {
   const rows = [...drivers].sort((a, b) => Math.abs(b.contribution_raw) - Math.abs(a.contribution_raw)).slice(0, max);
   const scale = Math.max(0.1, ...rows.map((d) => Math.abs(d.contribution_raw)));
   return (
@@ -167,7 +167,7 @@ export function ShapBars({ drivers, units, max = 8 }: { drivers: Driver[]; units
             className="shap__row"
             role="row"
             tabIndex={0}
-            title={`${d.label}: ${value} → ${up ? '+' : ''}${d.contribution_raw.toFixed(2)} (log-odds)`}
+            title={`${d.label}: ${value} → ${up ? '+' : ''}${d.contribution_raw.toFixed(2)} (${outputScale})`}
           >
             <span className="shap__label" role="cell">
               {d.label}

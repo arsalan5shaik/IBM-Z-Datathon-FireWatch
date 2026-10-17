@@ -189,9 +189,9 @@ export function WhySection({ ex, loading, error, units }: { ex: Explanation | nu
           {ex && (
             <>
               <p className="why__summary">{plainEnglish(ex, units)}</p>
-              <ShapBars drivers={ex.drivers} units={units} />
+              <ShapBars drivers={ex.drivers} units={units} outputScale={ex.output_scale} />
               <Note>
-                Bars are SHAP-style contributions in the model’s log-odds units (baseline {ex.base_value.toFixed(2)} → {ex.raw_score.toFixed(2)}). They explain
+                Bars are SHAP-style contributions in the model’s declared {ex.output_scale ?? 'unknown'} units (baseline {ex.base_value.toFixed(2)} → {ex.raw_score.toFixed(2)}). They explain
                 the model, not physical cause.
               </Note>
             </>
