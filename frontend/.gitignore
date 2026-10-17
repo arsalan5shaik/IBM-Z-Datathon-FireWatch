@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.log
+.vite/
+# downloads used by scripts/build-*.mjs
+scripts/.cache/
+# local QA helpers
+.shoot.mjs
+.debug.mjs
+.sheet.mjs
+*.tsbuildinfo
