@@ -16,7 +16,7 @@ function App() {
         <FireMap />
       </main>
       <footer className="app-footer">
-        Experimental prototype. No live fire detections or risk predictions are displayed.
+        Experimental prototype displaying historical satellite thermal observations, not live confirmed fires or wildfire perimeters. No risk predictions are displayed.
         This is not an official wildfire alert or evacuation service.
       </footer>
     </div>

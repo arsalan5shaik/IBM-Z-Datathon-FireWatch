@@ -31,3 +31,34 @@ h2 { margin: 0; font-size: 18px; font-weight: 600; }
 /* Keep basemap attribution readable inside the dark application theme. */
 .fire-map .maplibregl-ctrl-attrib { color: #25313b; background: rgba(255, 255, 255, 0.92); }
 .fire-map .maplibregl-ctrl-attrib a { color: #25313b; }
+
+.hotspot-controls { padding: 16px 20px; border-top: 1px solid #36444e; border-bottom: 1px solid #36444e; background: #142029; }
+.historical-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.historical-heading h3 { margin: 0; font-size: 15px; }
+.historical-badge { color: #ffd2a5; background: #503a25; padding: 4px 8px; font-size: 11px; border-radius: 4px; }
+.hotspot-inputs { display: flex; align-items: center; flex-wrap: wrap; gap: 18px 28px; margin: 16px 0; }
+.hotspot-inputs label { font-size: 13px; color: #d8e3eb; }
+.date-control, .opacity-control { display: flex; flex-direction: column; gap: 7px; }
+.date-control { flex: 1 1 250px; max-width: 430px; }
+.date-control select { width: 100%; padding: 9px 10px; color: #e5edf4; background: #233540; border: 1px solid #6b7e8d; border-radius: 5px; font: inherit; }
+.visibility-control { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.visibility-control input { width: 18px; height: 18px; accent-color: #ffb36b; }
+.opacity-control { min-width: 170px; }
+.opacity-control input { accent-color: #ffb36b; min-height: 24px; }
+.frp-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; }
+.frp-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.frp-legend i { display: inline-block; width: 11px; height: 11px; border: 1px solid #ffffff66; border-radius: 50%; }
+.layer-help, .data-status { font-size: 12px; line-height: 1.6; color: #b6c5cf; overflow-wrap: anywhere; margin: 10px 0 0; }
+.data-status { color: #d6e3eb; }
+.data-status-error { color: #ffbc9d; }
+.retry-button { margin-top: 10px; padding: 8px 12px; border: 1px solid #a7b6bf; border-radius: 4px; background: #263741; color: #fff; cursor: pointer; }
+.hotspot-popup { color: #17242e; max-height: 290px; overflow: auto; padding: 4px 12px 2px 2px; }
+.hotspot-popup h3 { font-size: 14px; margin: 0 0 10px; }
+.hotspot-popup dl { margin: 0; font-size: 12px; }
+.hotspot-popup dt { font-weight: 650; margin-top: 8px; }
+.hotspot-popup dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+.hotspot-popup p { font-size: 11px; line-height: 1.5; margin: 12px 0 0; }
+.fire-map .maplibregl-popup-content { background: #fff; color: #17242e; border-radius: 6px; padding: 14px; }
+.fire-map .maplibregl-popup-close-button { color: #17242e; font-size: 22px; min-width: 28px; min-height: 28px; }
+select:focus-visible, input:focus-visible { outline: 3px solid #f6ae75; outline-offset: 3px; }
+@media (max-width: 650px) { .hotspot-controls { padding: 16px; } .hotspot-inputs { gap: 10px 18px; } }
