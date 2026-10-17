@@ -89,7 +89,7 @@ def status(request: Request, runtime: Runtime) -> ServiceStatus:
         ),
         providers={
             name: SubsystemStatus() for name in ("firms", "weather", "incidents", "chatbot")
-        },
+        } | {"weather": request.app.state.weather.status()},
     )
 
 
