@@ -86,10 +86,16 @@ class WeatherCache:
                 self.last_error = "weather_cache_invalid"
 
     def state(self, entry, now=None):
-        age = ((now or self.clock()) - entry.forecast.fetched_at).total_seconds()
+        now = now or self.clock()
+        age = (now - entry.forecast.fetched_at).total_seconds()
         if age < -60 or age > self.settings.weather_stale_hours * 3600:
             return "unavailable"
-        return "fresh" if age < self.settings.weather_refresh_minutes * 60 else "stale"
+        same_hour = now.replace(minute=0, second=0, microsecond=0) == (
+            entry.forecast.fetched_at.replace(minute=0, second=0, microsecond=0)
+        )
+        return (
+            "fresh" if same_hour and age < self.settings.weather_refresh_minutes * 60 else "stale"
+        )
 
     async def get(self, points):
         if not points or len(points) > self.settings.weather_max_anchors:

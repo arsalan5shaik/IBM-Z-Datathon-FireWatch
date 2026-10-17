@@ -220,7 +220,9 @@ No terminal hour is duplicated or extrapolated. C/percent/mm/km/h are normalized
 wind direction is FROM north. Precipitation describes the preceding-hour amount.
 Provider model issue time is unknown; fetched_at is retrieval time.
 
-Weather refresh is cache-first, at WEATHER_REFRESH_MINUTES. A shared process lock
+Weather refresh is cache-first, at WEATHER_REFRESH_MINUTES or the next UTC hour
+boundary. This preserves coverage of the publisher's next 168 hours even when
+the time-to-live has not expired. A shared process lock
 and async lock prevent overlapping refreshes; unchanged disk snapshots are not
 reparsed. Persistent cache is atomically replaced only after all batches validate,
 bounded by WEATHER_MAX_ANCHORS and 32 MB. Existing good inputs survive partial
