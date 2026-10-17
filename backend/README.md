@@ -1,8 +1,8 @@
 # FireWatch backend
 
 API foundation for the primary `FireWatch_Backend_Architecture.md` specification.
-Status, health and validated JSON forecast read routes are implemented. No real
-ML artifacts have been provided. There are no provider calls or inference on GET.
+Status, health, validated JSON forecast reads and cached NASA FIRMS observations
+are implemented. No real ML artifacts have been provided. There are no provider calls or inference on GET.
 
 ## Setup and startup
 
@@ -41,7 +41,8 @@ strings, client request IDs, raw exception messages and credentials.
 
 | Endpoint | Behavior |
 | --- | --- |
-| `GET /api/v1/status` | HTTP 200 diagnostic report; validated forecast completeness, fixture/live/unavailable mode, timestamps, revisions and scheduler state; other providers remain unavailable |
+| `GET /api/v1/status` | Forecast completeness, timestamps, revisions, scheduler state and cached FIRMS provider health |
+| `GET /api/v1/fires/live?bbox=w,s,e,n&hours=24&limit=500` | Cached NOAA-20/21 satellite hotspots with explicit freshness; also accepts `since` instead of `hours`; see [FIRMS setup](FIRMS.md) |
 | `GET /health/live` | HTTP 200 while the process can answer HTTP |
 | `GET /health/ready` | HTTP 200 after API lifespan initialization; HTTP 503 before initialization or during teardown |
 | `GET /openapi.json`, `/docs` | Generated response/error schemas and interactive documentation |
@@ -205,3 +206,9 @@ deploy a reviewed reader compatible with the optional manifest fields. The prior
 snapshot remains referenced by `manifest.previous.json`; a deliberate restore must
 use the same scheduler lock and atomic replacement. Do not simply deploy an older
 strict reader that rejects new fields, delete runtime datasets, or run two writers.
+
+## NASA FIRMS observations
+
+See [FIRMS.md](FIRMS.md) for key setup, the separate refresh owner, query limits,
+GeoJSON and frontend compatibility, failure semantics, tests and known limitations.
+No frontend, ML or rolling-forecast implementation is changed by this feature.
