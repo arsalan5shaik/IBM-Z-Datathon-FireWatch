@@ -189,8 +189,14 @@ lock exclusion, persisted throttling, atomic-write failure, bbox/time/limit filt
 GeoJSON and existing frontend aliases, staleness and no network calls on GET.
 The smoke server verifies the real HTTP 503 path and graceful shutdown without a key.
 
-A live NASA fetch with the participant's key, CI results, and LinuxONE deployment
-must be verified separately before claiming them complete. No key is bundled.
+A real NASA fetch and loopback HTTP check passed on 2026-10-17 at about 21:38 UTC.
+The California-filtered 72-hour cache contained 351 NOAA-20 and 347 NOAA-21 records,
+with zero invalid rows. All 698 records had finite nonnegative FRP and valid UTC
+acquisition times/coordinates; the latest acquisition was 21:31 UTC. Live GeoJSON,
+`since` compatibility, freshness/status, truncation and invalid-query 422 responses
+were checked over real local HTTP. These counts are a verification snapshot, not
+fixed demo data. The private key and cache remain ignored and are not committed.
+LinuxONE deployment still needs independent verification. No key is bundled.
 The supplied handoff ends in Section 11 at “No API”; missing security/acceptance
 requirements remain a team clarification. The architecture document and explicit
 user assignment govern known requirements; the PR must not be merged automatically.

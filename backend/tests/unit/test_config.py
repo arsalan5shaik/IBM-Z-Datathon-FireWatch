@@ -87,3 +87,13 @@ def test_dotenv_explicit_path(tmp_path):
     env_file = tmp_path / ".env"
     env_file.write_text('CORS_ORIGINS=["http://localhost:5173"]\n', encoding="utf-8")
     assert Settings(_env_file=env_file).cors_origins == ["http://localhost:5173"]
+
+
+def test_numeric_literals_from_documented_dotenv_and_environment(tmp_path, monkeypatch):
+    env_file = tmp_path / ".env"
+    env_file.write_text("FORECAST_HOURS=168\nGRID_RESOLUTION_M=3000\n", encoding="utf-8")
+    settings = Settings(_env_file=env_file)
+    assert settings.forecast_hours == 168 and settings.grid_resolution_m == 3000
+    monkeypatch.setenv("FORECAST_HOURS", "7")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=env_file)

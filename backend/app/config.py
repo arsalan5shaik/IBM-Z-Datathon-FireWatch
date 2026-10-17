@@ -57,6 +57,17 @@ class Settings(BaseSettings):
     firms_refresh_minutes: int = Field(default=15, ge=10, le=1440)
     weather_refresh_minutes: int = Field(default=60, ge=15, le=1440)
 
+    @field_validator("forecast_hours", "grid_resolution_m", mode="before")
+    @classmethod
+    def integer_literal_from_environment(cls, value):
+        # Environment/dotenv values are strings; retain Literal validation after conversion.
+        if isinstance(value, str):
+            try:
+                return int(value)
+            except ValueError:
+                pass
+        return value
+
     @field_validator("firms_sources")
     @classmethod
     def unique_sources(cls, values):
