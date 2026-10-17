@@ -1,10 +1,42 @@
 # Backend implementation status
 
-Updated: 2026-10-17. PR #1 merged as `72ceaa5`; remote main verified and post-merge
-smoke passed. The requester explicitly authorized autonomous work and merges under
-the existing check/review gates. Forecast contracts are implemented on
-`JS_feat/forecast-contracts`; current feature details below supersede the original
-foundation checkpoint retained for history.
+Updated: 2026-10-17. Foundation PR #1 and forecast-contracts PR #2 are merged.
+The active feature is `JS_feat/rolling-window`, exclusively in the existing
+`firewatch-backend-worktree`. The requester authorized this feature and merge
+after green CI and applicable reviews; no protection bypass is permitted.
+
+## Current feature: rolling window
+
+- Preserved the pre-existing uncommitted draft in `6aa9db2` and verified its push.
+  Merged current origin/main (`6e8972b`) as `d77d292`, without frontend/ML edits.
+- Implemented: 168-hour UTC bootstrap, 167+1 rollover, missed-hour recovery,
+  conservative whole-window revision invalidation, single-owner process locking,
+  bounded CLI retries, immutable JSON/grid publication, manifest-last commit,
+  previous-manifest recovery, retention/disk guards, accurate status/freshness,
+  and derived SQLite indexes for bbox/cell reads without full-array JSON parsing.
+- Schema additions: optional grid/boundary references and validated cell count.
+  Legacy artifacts remain readable. New strict readers must deploy before the
+  publisher. Shared README and the feature PR carry the cross-team notice.
+- Final local validation: `python -m pytest -q` **141 passed**, zero failures or
+  skips, one upstream Starlette deprecation warning (136.46 s). `python -m ruff
+  check .` passed; `python -m ruff format --check .` passed (44 files); both
+  `python scripts/smoke.py` and `python scripts/smoke.py --fixtures` passed.
+- Final diff review found no frontend/ML edits, secrets or generated artifacts.
+  A concurrent main update adds only a teammate CSV and is preserved by merge.
+- PR/merge: feature prepared for review; CI must pass on the final pushed commit.
+  The requester's latest instruction requires explicit approval before merge.
+  No merge into main is authorized at this checkpoint.
+- Integration dependencies: real ML hourly JSON, authoritative 3 km grid/boundary,
+  agreed revision/CLI contract and deployment scheduler owner. Backend generation
+  stays disabled by default; no model inference implementation was added.
+- LinuxONE/s390x and network-filesystem locking remain unverified. Provider,
+  search, SHAP and chatbot features are outside this branch's scope.
+
+## Historical records
+
+The inventory and checkpoints below describe earlier commits, not current state.
+Both named specs and the frontend integration document now exist; shared schemas
+are present. Earlier pending-PR statements are superseded by the current summary.
 
 ## Repository inventory and prerequisites
 

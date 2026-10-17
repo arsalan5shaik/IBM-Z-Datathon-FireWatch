@@ -4,8 +4,9 @@ Backend implementation: see [`backend/README.md`](backend/README.md) for FastAPI
 setup, health/status endpoints and verification, and
 [`backend/IMPLEMENTATION_STATUS.md`](backend/IMPLEMENTATION_STATUS.md) for the
 feature plan and differences between this older handoff and the primary backend
-architecture. The API foundation reports unavailable data until ingestion and
-validated ML artifacts are integrated.
+architecture. The backend serves validated hourly JSON and supports an opt-in,
+single-owner rolling 168-hour publisher. Real ML artifacts and provider ingestion
+remain integration dependencies; fixture responses are explicitly labeled.
 
 For the IBM Datathon. California-only current NASA thermal anomaly monitoring + 7-day ML hotspot-occurrence **risk** estimates, illustrative coverage overlay, grounded chat and same-layer 2D/3D MapLibre map.
 

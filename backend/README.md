@@ -41,7 +41,7 @@ strings, client request IDs, raw exception messages and credentials.
 
 | Endpoint | Behavior |
 | --- | --- |
-| `GET /api/v1/status` | HTTP 200 diagnostic report; `status:degraded`, `data_mode:unavailable`, API healthy after startup, all data subsystems unavailable, 0 valid / 168 missing forecast hours |
+| `GET /api/v1/status` | HTTP 200 diagnostic report; validated forecast completeness, fixture/live/unavailable mode, timestamps, revisions and scheduler state; other providers remain unavailable |
 | `GET /health/live` | HTTP 200 while the process can answer HTTP |
 | `GET /health/ready` | HTTP 200 after API lifespan initialization; HTTP 503 before initialization or during teardown |
 | `GET /openapi.json`, `/docs` | Generated response/error schemas and interactive documentation |
@@ -66,13 +66,10 @@ HTTP 404, 405, 422, 500, 503 and rejected CORS preflight 400 use this envelope.
 Validation failures return a count rather than potentially sensitive raw inputs.
 Every HTTP response has `X-Request-ID` and `Cache-Control: no-store`.
 
-Frontend migration proposal: this primary contract differs from the older
-`02_API_CONTRACT.md` snapshot routes and status shape. In particular, consumers
-must handle `data_mode:unavailable` and subsystem statuses instead of assuming
-`status:ok` means forecasts exist. See `IMPLEMENTATION_STATUS.md` for all contract
-differences. The missing named frontend spec was not fabricated; work resumed
-using the existing API/UI documents after the requester's instruction to continue.
-No frontend/ML files or shared schemas were modified.
+Frontend consumers must check `data_mode` and individual subsystem statuses.
+`frontend/API_INTEGRATION.md` records the existing forecast client. This feature
+populates status from validated forecasts and improves indexed cell history;
+it does not change frontend risk categories or add a statewide overview endpoint.
 
 ## Configuration
 
@@ -87,11 +84,10 @@ credentials, paths, query strings and malformed ports are rejected. Cookies are
 not enabled. CORS is a browser access policy, not authentication.
 
 `FORECAST_HOURS=168` and `GRID_RESOLUTION_M=3000` are fixed contract values.
-`JOB_ENABLED=true` fails validation in this feature; scheduler ownership must be
-agreed before enabling generation. `FORECAST_GENERATOR_CMD` is reserved and never
-executed. Timeout, cache, retry and refresh settings are bounded and reserved for
-subsequent provider features. Secrets use Pydantic secret types and are never
-returned by status. Complete names/defaults are in `.env.example`.
+`JOB_ENABLED=true` requires `SCHEDULER_OWNER=backend`. The default is disabled and
+unassigned. `SCHEDULER_OWNER=ml` leaves this API a read-only consumer; never enable
+two publishers. Generator argv and secrets are omitted from status and job logs.
+Complete names/defaults are in `.env.example`.
 
 ## Verification
 
@@ -102,6 +98,7 @@ uv run --no-sync python -m pytest
 uv run --no-sync python -m ruff check .
 uv run --no-sync python -m ruff format --check .
 uv run --no-sync python scripts/smoke.py
+uv run --no-sync python scripts/smoke.py --fixtures
 ```
 
 Tests isolate environment settings and reject real HTTP provider transports.
@@ -116,6 +113,95 @@ native geospatial or ML packages. Pydantic's native core still needs testing on 
 actual target runtime; Windows/x86 Linux results do not prove s390x support.
 Later features must verify geometry dependencies before adopting them.
 
-Rollback: stop the server and redeploy the previous reviewed commit/environment.
-Foundation performs no migrations or persistent artifact writes. Do not roll back
-by deleting teammate datasets or runtime artifacts.
+## Rolling 168-hour publication
+
+Run the external job from `backend/`, using the same SHARED_DATA_DIR as the API:
+
+```sh
+uv run --no-sync python -m app.jobs.roll_window --revision /absolute/path/to/revision.json
+```
+
+The revision JSON has `data_mode`, `model_version`, `feature_version`,
+`grid_version`, `input_revision`, `score_type`, and `target_type`. ML owns these
+values, geometry and prediction generation. A mock example is in
+`shared/examples/forecast-revision.example.json`; no production generator or
+model is included. Fixtures additionally require `ALLOW_FIXTURE_DATA=true`.
+
+`FORECAST_GENERATOR_CMD` is a JSON argv array, evaluated without a shell. Backend
+appends `--request /private/staging/request.json`. The request is:
+
+```json
+{
+  "schema_version": "1.0",
+  "hours": ["2026-03-08T08:00:00Z"],
+  "revision": {
+    "data_mode": "fixture", "grid_version": "mock-ca-grid-3km-v1",
+    "model_version": "mock-model-v1", "feature_version": "mock-features-v1",
+    "input_revision": "mock-weather-v1", "score_type": "relative_risk",
+    "target_type": "mock_fire_activity"
+  },
+  "output_dir": "/private/staging"
+}
+```
+
+The CLI must exit successfully and write one schema-valid complete-grid
+`YYYYMMDDTHH00Z.json` for every requested hour inside output_dir. It must not
+publish the shared manifest itself. Failed/timeout attempts have bounded retries
+and exponential backoff; invalid JSON aborts publication. Partial retry outputs
+are discarded. Agree this adapter contract with ML before setting a real command.
+
+Use exactly one external cron/systemd owner on the filesystem holding the store.
+For cron, an hourly entry such as the following invokes the one-shot job:
+
+```cron
+0 * * * * cd /srv/firewatch/backend && /srv/firewatch/backend/.venv/bin/python -m app.jobs.roll_window --revision /srv/firewatch/shared/data/revision.json
+```
+
+Configure that account's environment or backend/.env explicitly. Publish revision
+JSON atomically when upstream inputs change; rerun the same job immediately after
+a revision change if necessary. A process-safe nonblocking lock prevents overlap,
+including separate processes. OS process death releases the lock. FastAPI startup
+and GET never start a schedule. Local Windows and POSIX locking are implemented;
+network filesystem locking and actual LinuxONE deployment remain unverified.
+
+Each run targets the **strictly next UTC hour**, including when called exactly on
+an hour, followed by 167 slots. Calendar/DST changes never alter this count.
+Unchanged revisions reuse matching files: normal rollover is 167+1; missed runs
+append all missing hours. A changed revision conservatively regenerates the full
+window because no cell/hour dependency map is supplied. This covers lagged weather
+features without incorrectly assuming only one hour changes.
+
+Publication copies geometry once into content-addressed `grids/`, validates all
+generated hours, fsyncs immutable JSON and derived SQLite indexes, saves the prior
+good manifest, then atomically replaces `manifest.json` **last**. Before-commit
+failures leave the old snapshot usable; after-commit failures leave the complete
+new snapshot usable. Invalid current manifest/grid references fall back to
+`manifest.previous.json`, labeled recovered/stale. Invalid hourly files return
+503 and are repaired on the next run; they never become zero scores.
+
+`/status` counts complete validated hours in the published window (not just listed
+filenames), reports publication success, next schedule time and safe job errors.
+A forecast is stale if its window no longer starts at the strictly next UTC hour,
+coverage is incomplete, recovery was used, or the last job failed. Overall service
+status remains degraded while the other providers are unavailable. The response
+always distinguishes fixtures from live ML output.
+
+JSON remains authoritative. Per-artifact SQLite indexes store metadata and scores
+keyed by cell ID; bbox requests query selected IDs and cell history selects one ID
+per hour. A source fingerprint invalidates an index if its JSON changes. Legacy or
+damaged indexes fall back to JSON validation; the scheduler rebuilds them. Runtime
+indexes/database/artifacts are ignored by Git. Full-state production latency and
+memory still require measurement with the ML team's actual grid and artifacts.
+
+Retention only removes unreferenced backend objects, indexes, versioned grids and
+expired private staging directories after successful publication and the retention
+grace. Both current and previous manifest references are protected. Source ML grid
+files and unrelated data are never pruned. Disk-space checks reject a run before
+publication; write failures preserve the prior manifest. Operators must monitor
+free space during unusually large generations.
+
+Rollback: disable the external scheduler first, preserve the runtime store, and
+deploy a reviewed reader compatible with the optional manifest fields. The prior
+snapshot remains referenced by `manifest.previous.json`; a deliberate restore must
+use the same scheduler lock and atomic replacement. Do not simply deploy an older
+strict reader that rejects new fields, delete runtime datasets, or run two writers.
