@@ -115,6 +115,7 @@ export function Conditions({ ex, weather, units }: { ex: Explanation | null; wea
   if (c.slope_deg != null) rows.push(['Slope', `${c.slope_deg.toFixed(0)}°`]);
   if (!ex && !weather) return <Note>{dataset.state === 'loading' ? 'Loading forecast weather…' : 'Forecast weather is unavailable for this hour.'}{dataset.error ? ` ${dataset.error}` : ''}</Note>;
   return <>
+    {!weather && <Note>{dataset.state === 'loading' ? 'Loading forecast weather…' : 'Forecast weather is unavailable for this hour.'} {dataset.error ?? ''} Model explanation inputs below are separate from live weather.</Note>}
     {weather && <Note>{weather.source ?? (dataset.origin === 'api' ? 'Weather API' : 'Sample weather')} · forecast{weather.fetched_at ? ` · fetched ${relativeTime(Date.parse(weather.fetched_at))}` : ''}{weather.cache_status === 'stale' || dataset.error ? ' · stale' : ''}{dataset.state === 'loading' ? ' · refreshing' : ''}</Note>}
     <Stats rows={rows} />
   </>;

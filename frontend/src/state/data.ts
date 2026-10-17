@@ -95,7 +95,7 @@ export async function loadWeather(force = false) {
   } catch (error) {
     if (request !== weatherRequest || floorHour(validTimeOf(getState())) !== hour) return;
     // Keep labeled last-good data; lookups reject it outside its exact valid hour.
-    setState({ weather: { ...previous, state: 'error', origin: 'api', error: errMsg(error) } });
+    setState({ weather: { ...previous, data: previous.origin === 'api' ? previous.data : null, state: 'error', origin: 'api', error: errMsg(error) } });
   }
 }
 

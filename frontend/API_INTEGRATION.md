@@ -15,6 +15,9 @@ what it needs from each route, and what happens until a route exists. Verified o
 Every dataset is loaded independently. If a route fails (404 because it isn't built yet, 503, network), only that
 layer switches to **sample data**, the status pill reads *Live + sample layers* and a banner says so.
 A refresh failure after a successful load keeps the last good data and marks it stale.
+Weather is an exception to automatic sample fallback when an API is configured:
+unavailable hours show an explicit error, and a previous frame is never reused at
+a different valid hour. Explicit demo mode still uses labeled sample weather.
 
 ## Routes
 
@@ -25,7 +28,8 @@ A refresh failure after a successful load keeps the last good data and marks it 
 | `GET /forecasts/cell/{cell_id}` | ✅ | 168-hour chart, peak-hour answers | chart shows loaded hours only |
 | `GET /fires/live?bbox&since` | planned | hotspots, flame markers, influence outlines | sample hotspots |
 | `GET /fires/incidents?bbox` | planned | official perimeters, incident panel | 404 → *no official feed* (empty) |
-| `GET /wind?bbox&hour&density` | planned | wind arrows, weather labels/chip, panel conditions | sample weather |
+| `GET /wind?bbox&hour&density` | implemented | existing wind arrows, weather labels/chip, panel conditions | explicit unavailable/stale state |
+| `GET /weather?latitude&longitude&hour` | implemented | optional point/cell API; map/panels reuse the statewide wind samples | 404 for unavailable hour; 503 for no usable cache |
 | `GET /explain/{cell_id}?hour` | planned | *Why this risk?* SHAP bars | “factors not provided yet” — never invented |
 | `POST /chat` | planned | FireWatch AI | offline assistant over loaded data |
 | places search / boundaries | not needed | bundled Census data (`public/data/`) | — |
@@ -80,6 +84,21 @@ Parsing is lenient so the first implementation should just work; the first name 
   values identical between search and chat.
 
 ## Open items for the backend / ML teams
+
+Weather feature update: `/wind` returns normalized C, percent, mm, km/h and
+meteorological degrees **from** north, UTC `forecast_hour`, source/fetch timestamps,
+cache freshness and coverage. The client adds 180 degrees to draw arrows toward
+flow. Existing location selection and the risk timeline drive weather lookup; no
+second timeline or new map layers were added. Hour responses are cached for at
+most one minute in the client; old requests cannot overwrite a newer selection.
+The API batches/caches forecasts at stable 0.5-degree display anchors. This is a
+coarse display sample and not a 3 km weather grid. Forecast retrieval times are
+shown; Open-Meteo issue time is unknown. A new model forecast is not inferred from
+weather availability. See `backend/WEATHER_INTEGRATION.md` for ML blockers.
+
+Rolling-window PR #3 has resolved status completeness and indexed cell-history
+reads described as open issues in the original notes above. Real ML handoff and
+statewide overview/risk-category agreement remain separate work.
 
 1. **Statewide overview.** The frontend spec wants broad risk regions at California zoom; bbox slices can't
    provide that. Suggested: a cacheable geometry-once grid (`GET /forecasts/grid` or vector tiles) plus a

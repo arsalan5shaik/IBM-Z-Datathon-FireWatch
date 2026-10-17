@@ -38,3 +38,11 @@ handoff is separate from that authoritative prediction contract.
 
 Milestones: provider and tests; cache/sampling/revisions; endpoints; existing UI
 integration and tests; proposed inference handoff; full verification and PR.
+
+Browser contract smoke: start `npm run dev -- --host 127.0.0.1 --port 5174` in
+frontend/, then `node scripts/smoke-weather.mjs` in another terminal. It uses the
+installed Chrome channel (or FIREWATCH_BROWSER_PATH), the existing UI, and mock
+API/style responses. It checks location and hour changes, stale labels, wind
+orientation/source updates, and outage clearing. It does not claim live-model or
+live-weather browser verification. No new browser download is required if Chrome
+is installed. FIREWATCH_SMOKE_URL can select another existing Vite server.

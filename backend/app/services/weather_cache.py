@@ -145,7 +145,7 @@ class WeatherCache:
                         # A partial refresh may not replace still-valid cached hours.
                         for hour, value in old_hours.items():
                             if (
-                                hour >= now
+                                hour >= now.replace(minute=0, second=0, microsecond=0)
                                 and value.complete
                                 and (hour not in new_hours or not new_hours[hour].complete)
                             ):
@@ -198,7 +198,7 @@ class WeatherCache:
     def status(self):
         from app.schemas.status import SubsystemStatus
 
-        usable = [e for e in self.entries.values() if self.state(e) != "unavailable"]
+        usable = [e for e in list(self.entries.values()) if self.state(e) != "unavailable"]
         if not usable:
             return SubsystemStatus(last_error=self.last_error)
         stale = bool(self.last_error) or any(self.state(e) != "fresh" for e in usable)

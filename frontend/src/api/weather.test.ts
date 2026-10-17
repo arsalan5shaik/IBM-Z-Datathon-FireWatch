@@ -87,6 +87,7 @@ describe('weather forecast integration', () => {
   });
 
   it('keeps explicit errors without replacing unavailable API weather with samples', async () => {
+    setState({ weather: { state: 'ready', data: grid(), origin: 'fallback', error: null, at: NOW } });
     vi.spyOn(RemoteProvider.prototype, 'getWeather').mockRejectedValue(new Error('Missing forecast hour'));
     await loadWeather(true);
     expect(getState().weather.origin).toBe('api');

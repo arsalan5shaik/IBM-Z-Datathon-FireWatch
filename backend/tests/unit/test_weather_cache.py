@@ -102,3 +102,28 @@ def test_process_lock_preserves_stale_cache_without_duplicate_refresh(tmp_path):
         assert provider.calls == 1
 
     asyncio.run(run())
+
+
+def test_cache_bounds_and_failed_batch_is_not_published(tmp_path):
+    settings = Settings(
+        _env_file=None, repo_root=tmp_path, weather_max_anchors=2, weather_batch_size=1
+    )
+    provider = MockProvider()
+    cache = WeatherCache(provider, settings, lambda: NOW)
+    points = [sample_point(36.5 + i, -120) for i in range(3)]
+
+    async def run():
+        for point in points:
+            await cache.get([point])
+        assert len(cache.entries) == 2 and points[0].anchor_id not in cache.entries
+        with pytest.raises(APIError):
+            await cache.get(points)
+        provider.fail = True
+        empty = WeatherCache(
+            provider, settings.model_copy(update={"shared_data_dir": tmp_path / "new"})
+        )
+        with pytest.raises(APIError):
+            await empty.get(points[:2])
+        assert not empty.entries and not empty.path.exists()
+
+    asyncio.run(run())

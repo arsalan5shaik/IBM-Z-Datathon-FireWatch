@@ -104,3 +104,29 @@ def test_provider_mock_http(status):
 
     asyncio.run(run())
     assert len(calls) == 1
+
+
+def test_batched_provider_retry_after_rate_limit(monkeypatch):
+    calls, delays = [], []
+
+    def handler(request):
+        calls.append(request)
+        if len(calls) == 1:
+            return httpx.Response(429, headers={"retry-after": "2"})
+        return httpx.Response(200, json=[response(), response()])
+
+    async def sleep(seconds):
+        delays.append(seconds)
+
+    monkeypatch.setattr(asyncio, "sleep", sleep)
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            provider = OpenMeteoProvider(client, Settings(_env_file=None, provider_max_retries=1))
+            points = [
+                WeatherPoint(anchor_id=f"test{i}", latitude=36.5, longitude=-120) for i in range(2)
+            ]
+            assert len(await provider.fetch(points, NOW)) == 2
+
+    asyncio.run(run())
+    assert len(calls) == 2 and delays == [2]

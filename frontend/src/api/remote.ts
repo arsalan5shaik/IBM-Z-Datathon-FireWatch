@@ -181,7 +181,7 @@ export class RemoteProvider implements DataProvider {
     const speedMs = col('wind_speed_ms', 'speed_ms');
     const speedKmh = col('wind_speed_kmh', 'speed_kmh', 'wind_speed', 'speed');
     for (let i = 0; i < n; i++) if (!Number.isFinite(speedKmh[i]) && Number.isFinite(speedMs[i])) speedKmh[i] = speedMs[i] * 3.6;
-    return {
+    const weather: WeatherGrid = {
       metadata: {
         generated_at: str(pick(res.metadata ?? {}, 'fetched_at', 'generated_at')) ?? '',
         fetched_at: str(res.metadata?.fetched_at) ?? undefined,
@@ -201,6 +201,12 @@ export class RemoteProvider implements DataProvider {
       wind_gust_kmh: col('wind_gust_kmh', 'gust_kmh', 'wind_gusts'),
       precipitation_mm: col('precipitation_mm', 'precipitation'),
     };
+    for (const values of [weather.temperature_c, weather.relative_humidity_pct, weather.precipitation_mm,
+      weather.wind_speed_kmh, weather.wind_direction_deg, weather.wind_gust_kmh])
+      if (Array.from(values).some(value => !Number.isFinite(value))) throw new Error('Incomplete weather forecast values');
+    if (weather.points.some(([lon, lat]) => !Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lat) > 90 || Math.abs(lon) > 180))
+      throw new Error('Invalid weather forecast coordinates');
+    return weather;
   }
 
   async explain(cellId: string, validAtMs: number): Promise<Explanation> {
