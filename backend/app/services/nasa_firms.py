@@ -17,7 +17,6 @@ from app.config import Settings
 from app.schemas.fires import Observation
 from app.services.grid import CA_BBOX
 
-BASE_URL = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
 REQUIRED = {"latitude", "longitude", "acq_date", "acq_time", "satellite", "instrument"}
 
 
@@ -46,9 +45,11 @@ def protect_provider_logs():
 def parse_csv(text: str, source: str, start: datetime, end: datetime, max_rows: int):
     """Validate each row and return deterministic observations plus aggregate counts."""
     reader = csv.DictReader(io.StringIO(text.lstrip("\ufeff")), strict=True)
-    if not reader.fieldnames or not REQUIRED.issubset(reader.fieldnames):
-        raise ProviderError("malformed_csv")
-    if len(reader.fieldnames) != len(set(reader.fieldnames)):
+    try:
+        headers = reader.fieldnames
+    except csv.Error:
+        raise ProviderError("malformed_csv") from None
+    if not headers or not REQUIRED.issubset(headers) or len(headers) != len(set(headers)):
         raise ProviderError("malformed_csv")
     expected_satellite = "NOAA-20" if source == "VIIRS_NOAA20_NRT" else "NOAA-21"
     satellite_codes = {"NOAA-20": {"N20", "NOAA-20", "1"}, "NOAA-21": {"N21", "NOAA-21", "2"}}

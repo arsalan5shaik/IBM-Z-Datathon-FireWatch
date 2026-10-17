@@ -68,6 +68,10 @@ class Settings(BaseSettings):
     @classmethod
     def safe_firms_url(cls, value):
         parsed = urlsplit(value)
+        try:
+            _ = parsed.port
+        except ValueError:
+            raise ValueError("Invalid FIRMS endpoint port") from None
         if (
             parsed.scheme != "https"
             or not parsed.hostname

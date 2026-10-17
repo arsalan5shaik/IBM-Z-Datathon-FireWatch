@@ -37,6 +37,7 @@ class Observation(BaseModel):
 class SourceSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
+    boundary_filter: str = "unavailable"
     last_attempt: AwareDatetime
     fetched_at: AwareDatetime | None = None
     coverage_start: AwareDatetime | None = None

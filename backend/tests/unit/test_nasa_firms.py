@@ -196,3 +196,33 @@ def test_new_key_environment_and_legacy_compatibility(monkeypatch):
     assert settings.nasa_firms_map_key.get_secret_value() == "new-test-key"
     assert "new-test-key" not in repr(settings)
     assert "legacy-test-key" not in settings.model_dump_json()
+
+
+def test_malformed_header_and_blank_optional_measurements():
+    with pytest.raises(ProviderError, match="malformed_csv"):
+        parse('"unterminated header')
+    records, _ = parse(HEADER + ROW.replace(",12.4,", ",,"))
+    assert records[0].frp is None
+
+
+def test_missing_optional_columns_and_midnight_utc_date_boundary():
+    header = "latitude,longitude,acq_date,acq_time,satellite,instrument\n"
+    records, _ = parse(header + "38.5,-121.5,2026-10-16,2359,N20,VIIRS\n")
+    assert records[0].acquired_at == datetime(2026, 10, 16, 23, 59, tzinfo=UTC)
+    assert records[0].brightness is None and records[0].confidence is None
+
+
+def test_retry_budget_exhaustion_and_http_date_retry_after(settings):
+    settings = Settings(_env_file=None, repo_root=settings.repo_root, nasa_firms_map_key="test")
+    calls, delays = [], []
+
+    def handler(request):
+        calls.append(1)
+        return httpx.Response(429, headers={"Retry-After": "Sat, 17 Oct 2026 12:00:02 GMT"})
+
+    async def sleep(delay):
+        delays.append(delay)
+
+    with pytest.raises(ProviderError, match="rate_limited"):
+        run_fetch(settings, handler, sleep=sleep)
+    assert len(calls) == 3 and delays == [2, 2]

@@ -14,6 +14,12 @@ class SubsystemStatus(BaseModel):
     last_error: str | None = None
 
 
+class FirmsStatus(SubsystemStatus):
+    configured: bool
+    cache_status: Literal["fresh", "stale", "unavailable"] = "unavailable"
+    last_attempted_refresh: AwareDatetime | None = None
+
+
 class ForecastStatus(SubsystemStatus):
     active_window_start: AwareDatetime | None = None
     active_window_end_exclusive: AwareDatetime | None = None
@@ -68,7 +74,7 @@ class ServiceStatus(BaseModel):
     data_mode: Literal["unavailable", "fixture", "live"] = "unavailable"
     api: SubsystemStatus
     forecast: ForecastStatus = Field(default_factory=ForecastStatus)
-    providers: dict[str, SubsystemStatus]
+    providers: dict[str, FirmsStatus | SubsystemStatus]
     scheduler: SchedulerStatus = Field(default_factory=SchedulerStatus)
 
 
