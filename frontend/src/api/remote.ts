@@ -171,17 +171,23 @@ export class RemoteProvider implements DataProvider {
   async getWeather(validAtMs = Date.now()): Promise<WeatherGrid> {
     const hour = floorHour(validAtMs);
     const res = await fetchJson<FeatureCollection<Point> & { metadata?: Props }>(this.url('/wind', { bbox: CA_BBOX, hour: toIso(hour), density: 'medium' }), {
-      timeoutMs: 20_000,
+      timeoutMs: 30_000,
     });
+    if (Date.parse(String(res.metadata?.forecast_hour)) !== hour) throw new Error('Weather response hour does not match the selected hour');
     const feats = (res.features ?? []).filter((f) => f.geometry?.type === 'Point');
+    if (!feats.length) throw new Error('No weather forecast samples for this hour');
     const n = feats.length;
     const col = (...keys: string[]) => Float32Array.from(feats, (f) => num(pick((f.properties ?? {}) as Props, ...keys)) ?? NaN);
     const speedMs = col('wind_speed_ms', 'speed_ms');
     const speedKmh = col('wind_speed_kmh', 'speed_kmh', 'wind_speed', 'speed');
     for (let i = 0; i < n; i++) if (!Number.isFinite(speedKmh[i]) && Number.isFinite(speedMs[i])) speedKmh[i] = speedMs[i] * 3.6;
-    return {
+    const weather: WeatherGrid = {
       metadata: {
-        generated_at: str(pick(res.metadata ?? {}, 'issued_at', 'generated_at')) ?? toIso(Date.now()),
+        generated_at: str(pick(res.metadata ?? {}, 'fetched_at', 'generated_at')) ?? '',
+        fetched_at: str(res.metadata?.fetched_at) ?? undefined,
+        cache_status: res.metadata?.cache_status === 'stale' ? 'stale' : 'fresh',
+        complete: res.metadata?.complete !== false,
+        data_kind: 'forecast',
         source: str(res.metadata?.source) ?? 'FireWatch API (weather provider)',
         forecast_start: toIso(hour),
         step_minutes: 60,
@@ -195,6 +201,12 @@ export class RemoteProvider implements DataProvider {
       wind_gust_kmh: col('wind_gust_kmh', 'gust_kmh', 'wind_gusts'),
       precipitation_mm: col('precipitation_mm', 'precipitation'),
     };
+    for (const values of [weather.temperature_c, weather.relative_humidity_pct, weather.precipitation_mm,
+      weather.wind_speed_kmh, weather.wind_direction_deg, weather.wind_gust_kmh])
+      if (Array.from(values).some(value => !Number.isFinite(value))) throw new Error('Incomplete weather forecast values');
+    if (weather.points.some(([lon, lat]) => !Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lat) > 90 || Math.abs(lon) > 180))
+      throw new Error('Invalid weather forecast coordinates');
+    return weather;
   }
 
   async explain(cellId: string, validAtMs: number): Promise<Explanation> {

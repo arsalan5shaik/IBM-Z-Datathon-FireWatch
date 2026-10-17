@@ -1,0 +1,254 @@
+{
+  "$defs": {
+    "WeatherHour": {
+      "additionalProperties": false,
+      "properties": {
+        "forecast_hour": {
+          "format": "date-time",
+          "title": "Forecast Hour",
+          "type": "string"
+        },
+        "temperature_c": {
+          "anyOf": [
+            {
+              "maximum": 70,
+              "minimum": -100,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Temperature C"
+        },
+        "relative_humidity_pct": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Relative Humidity Pct"
+        },
+        "precipitation_mm": {
+          "anyOf": [
+            {
+              "maximum": 2000,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Precipitation Mm"
+        },
+        "wind_speed_kmh": {
+          "anyOf": [
+            {
+              "maximum": 600,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Wind Speed Kmh"
+        },
+        "wind_direction_deg": {
+          "anyOf": [
+            {
+              "maximum": 360,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Wind Direction Deg"
+        },
+        "wind_gust_kmh": {
+          "anyOf": [
+            {
+              "maximum": 600,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Wind Gust Kmh"
+        }
+      },
+      "required": [
+        "forecast_hour",
+        "temperature_c",
+        "relative_humidity_pct",
+        "precipitation_mm",
+        "wind_speed_kmh",
+        "wind_direction_deg",
+        "wind_gust_kmh"
+      ],
+      "title": "WeatherHour",
+      "type": "object"
+    },
+    "WeatherPartition": {
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:-]+$",
+          "title": "Revision",
+          "type": "string"
+        },
+        "inputs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/WeatherHour"
+          },
+          "title": "Inputs",
+          "type": "object"
+        }
+      },
+      "required": [
+        "revision",
+        "inputs"
+      ],
+      "title": "WeatherPartition",
+      "type": "object"
+    },
+    "WeatherPoint": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Anchor Id",
+          "type": "string"
+        },
+        "latitude": {
+          "maximum": 42.1,
+          "minimum": 32,
+          "title": "Latitude",
+          "type": "number"
+        },
+        "longitude": {
+          "maximum": -114,
+          "minimum": -125,
+          "title": "Longitude",
+          "type": "number"
+        }
+      },
+      "required": [
+        "anchor_id",
+        "latitude",
+        "longitude"
+      ],
+      "title": "WeatherPoint",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "proposed-weather-1",
+      "default": "proposed-weather-1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "model_contract_status": {
+      "const": "unconfirmed",
+      "default": "unconfirmed",
+      "title": "Model Contract Status",
+      "type": "string"
+    },
+    "source": {
+      "const": "Open-Meteo",
+      "default": "Open-Meteo",
+      "title": "Source",
+      "type": "string"
+    },
+    "data_mode": {
+      "enum": [
+        "fixture",
+        "live"
+      ],
+      "title": "Data Mode",
+      "type": "string"
+    },
+    "grid_version": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.:-]+$",
+      "title": "Grid Version",
+      "type": "string"
+    },
+    "mapping_revision": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.:-]+$",
+      "title": "Mapping Revision",
+      "type": "string"
+    },
+    "window_start": {
+      "format": "date-time",
+      "title": "Window Start",
+      "type": "string"
+    },
+    "forecast_hours": {
+      "const": 168,
+      "default": 168,
+      "title": "Forecast Hours",
+      "type": "integer"
+    },
+    "fetched_at": {
+      "format": "date-time",
+      "title": "Fetched At",
+      "type": "string"
+    },
+    "cell_to_anchor": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Cell To Anchor",
+      "type": "object"
+    },
+    "points": {
+      "items": {
+        "$ref": "#/$defs/WeatherPoint"
+      },
+      "title": "Points",
+      "type": "array"
+    },
+    "partitions": {
+      "additionalProperties": {
+        "$ref": "#/$defs/WeatherPartition"
+      },
+      "maxProperties": 168,
+      "minProperties": 168,
+      "title": "Partitions",
+      "type": "object"
+    }
+  },
+  "required": [
+    "data_mode",
+    "grid_version",
+    "mapping_revision",
+    "window_start",
+    "fetched_at",
+    "cell_to_anchor",
+    "points",
+    "partitions"
+  ],
+  "title": "ProposedWeatherInputs",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

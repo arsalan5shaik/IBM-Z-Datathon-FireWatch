@@ -1,0 +1,7 @@
+{
+  "schema_version": "proposed-weather-1",
+  "data_mode": "fixture",
+  "grid_version": "mock-ca-grid-3km-v1",
+  "points": [{"anchor_id": "mock_weather_anchor", "latitude": 36.5, "longitude": -120}],
+  "cell_to_anchor": {"MOCK_CA_000": "mock_weather_anchor", "MOCK_CA_001": "mock_weather_anchor"}
+}

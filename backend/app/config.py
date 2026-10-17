@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     provider_max_retries: int = Field(default=2, ge=0, le=5)
     firms_refresh_minutes: int = Field(default=15, ge=10, le=1440)
     weather_refresh_minutes: int = Field(default=60, ge=15, le=1440)
+    weather_batch_size: int = Field(default=50, ge=1, le=100)
+    weather_max_anchors: int = Field(default=512, ge=1, le=2000)
+    weather_stale_hours: int = Field(default=3, ge=1, le=24)
+    weather_refresh_timeout_seconds: float = Field(default=25, ge=1, le=60)
 
     @field_validator("forecast_hours", "grid_resolution_m", mode="before")
     @classmethod
