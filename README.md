@@ -34,4 +34,3 @@ configured. [Sources, API contracts, ZCTA accuracy and deployment setup](backend
 GitHub Pages deploys on every push to main; use repository variable
 `VITE_API_BASE_URL` or runtime `?api=https://<backend>/api/v1` for a separately
 hosted HTTPS backend. An empty URL retains explicitly labeled sample mode.
-

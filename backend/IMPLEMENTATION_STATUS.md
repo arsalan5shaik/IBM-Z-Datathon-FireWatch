@@ -17,15 +17,22 @@
   `VITE_API_BASE_URL` supplies HTTPS backend configuration. Runtime override and
   explicit demo mode remain. No public backend URL is configured; public live
   weather and authoritative ML grid mapping remain BLOCKED.
-- Commit/push: `ebab12a` backend/catalog milestone pushed. Targeted backend tests:
-  51 passed. Frontend: 34 passed plus TypeScript. Full final regression pending.
+- Commit/push: `ebab12a` backend/catalog and `fc3ac20` frontend/weather/deployment
+  milestones pushed. Final verification: **285 backend tests passed** (108.08 s),
+  Ruff lint/format (69 files) and both HTTP smoke modes PASS. **34 frontend tests
+  passed**, TypeScript and production build PASS. No tests skipped or failed.
 - Real Chrome test (no route mocks): Stockton keyboard search/boundary/camera,
   next hour, Sacramento replacement/hour preservation, 95202 ZCTA, county weather,
   tablet/mobile viewport, backend offline clearing and recovery all PASS.
   Real Open-Meteo fetched 440 batched display anchors and subsequent selections
   used valid provider cache. No real inference was triggered.
+- Production preview Chrome check PASS: default build makes no API calls and
+  labels sample data; runtime API override loads actual Stockton weather through
+  FastAPI. No hardcoded localhost backend is used. Detailed commands and evidence:
+  `LOCATION_VERIFICATION.md`.
 - Contract changes/provenance/hosting: `LOCATIONS_INTEGRATION.md`, shared README
-  and frontend API handoff. Other ML/FIRMS work is unchanged. PR/CI/merge pending.
+  and frontend API handoff. Other ML/FIRMS work is unchanged. PR/CI/merge pending
+  final GitHub checks; user explicitly authorizes squash merge when gates pass.
 
 ## Historical weather-inference checkpoint (PRs #4 and #6 now merged)
 

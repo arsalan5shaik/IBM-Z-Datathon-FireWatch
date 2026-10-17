@@ -280,4 +280,3 @@ dataset provenance, aliases, ZCTA limitations, frontend/weather behavior and
 HTTPS deployment configuration: [location handoff](LOCATIONS_INTEGRATION.md).
 Deployments must include the existing `frontend/public/data` geography or set
 `LOCATIONS_DATA_DIR`. ML cell mapping is explicitly unavailable pending its contract.
-
