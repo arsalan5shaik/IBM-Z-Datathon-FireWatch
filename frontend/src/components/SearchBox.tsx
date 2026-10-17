@@ -145,7 +145,7 @@ export function SearchBox() {
         aria-activedescendant={open && options[active] ? `${listId}-${active}` : undefined}
         autoComplete="off"
         spellCheck={false}
-        placeholder={narrow ? 'Search California places…' : 'Search a city, county, town, or ZIP code in California…'}
+        placeholder={narrow ? 'Search places…' : 'Search a city, county, town, or ZIP code in California…'}
         value={query}
         maxLength={120}
         onChange={(e) => {
