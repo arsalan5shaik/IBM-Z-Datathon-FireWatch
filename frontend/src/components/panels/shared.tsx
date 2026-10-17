@@ -3,10 +3,10 @@ import { ChevronDown, ChevronUp, Flame, Sparkles, X } from 'lucide-react';
 import { FUEL_CLASSES } from '../../config';
 import { getExplanation } from '../../state/data';
 import { groupsNear } from '../../state/lookups';
-import { select, setState, useStore } from '../../state/store';
+import { select, setState, useStore, validTimeOf } from '../../state/store';
 import { bearingDeg, compass16, type LngLat } from '../../lib/geo';
 import { formatDistance, formatElevation, formatPct, formatPrecip, formatSpeed, formatTemp, formatWind, plural } from '../../lib/format';
-import { relativeTime } from '../../lib/time';
+import { formatStamp, relativeTime } from '../../lib/time';
 import type { Explanation, PointWeather, Units } from '../../types';
 import { fuelPhrase } from '../../lib/assistant';
 import { ShapBars } from '../charts';
@@ -88,6 +88,7 @@ export function useExplanation(cellId: string | null, t: number) {
 
 export function Conditions({ ex, weather, units }: { ex: Explanation | null; weather: PointWeather | null; units: Units }) {
   const dataset = useStore((s) => s.weather);
+  const validAt = useStore(validTimeOf);
   const c = ex?.conditions ?? {};
   const w = { ...c, ...(weather ?? {}) } as Explanation['conditions'];
   const fuel = c.fuel_type ? (FUEL_CLASSES[c.fuel_type]?.label ?? c.fuel_type) : null;
@@ -117,6 +118,11 @@ export function Conditions({ ex, weather, units }: { ex: Explanation | null; wea
   return <>
     {!weather && <Note>{dataset.state === 'loading' ? 'Loading forecast weather…' : 'Forecast weather is unavailable for this hour.'} {dataset.error ?? ''} Model explanation inputs below are separate from live weather.</Note>}
     {weather && <Note>{weather.source ?? (dataset.origin === 'api' ? 'Weather API' : 'Sample weather')} · forecast{weather.fetched_at ? ` · fetched ${relativeTime(Date.parse(weather.fetched_at))}` : ''}{weather.cache_status === 'stale' || dataset.error ? ' · stale' : ''}{weather.complete === false ? ' · partial coverage' : ''}{dataset.state === 'loading' ? ' · refreshing' : ''}</Note>}
+    {weather && dataset.origin === 'api' && <Note>
+      Forecast valid {formatStamp(validAt)}. {weather.cache_status === 'stale' ? 'Stale cache' : 'Fresh provider cache'}.
+      {weather.sampling_coordinates && ` Sample: ${weather.sampling_coordinates[1].toFixed(4)}, ${weather.sampling_coordinates[0].toFixed(4)} (coarse weather anchor, not a 3 km pixel).`}
+      {weather.fetched_at && ` Provider refreshed ${formatStamp(Date.parse(weather.fetched_at))}.`}
+    </Note>}
     <Stats rows={rows} />
   </>;
 }

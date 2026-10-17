@@ -1,7 +1,7 @@
 name: Weather frontend checks
 on:
   push:
-    branches: ['JS_feat/weather-inference']
+    branches: ['JS_feat/weather-inference', 'JS_feat/location-search']
   pull_request:
     branches: [main]
     paths: ['frontend/**', '.github/workflows/weather-frontend-ci.yml']

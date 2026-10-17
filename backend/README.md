@@ -230,7 +230,9 @@ No terminal hour is duplicated or extrapolated. C/percent/mm/km/h are normalized
 wind direction is FROM north. Precipitation describes the preceding-hour amount.
 Provider model issue time is unknown; fetched_at is retrieval time.
 
-Weather refresh is cache-first, at WEATHER_REFRESH_MINUTES. A shared process lock
+Weather refresh is cache-first, at WEATHER_REFRESH_MINUTES or the next UTC hour
+boundary. This preserves coverage of the publisher's next 168 hours even when
+the time-to-live has not expired. A shared process lock
 and async lock prevent overlapping refreshes; unchanged disk snapshots are not
 reparsed. Persistent cache is atomically replaced only after all batches validate,
 bounded by WEATHER_MAX_ANCHORS and 32 MB. Existing good inputs survive partial
@@ -270,3 +272,11 @@ FIRMS integration is changed by this feature.
 Weather verification uses mock provider HTTP in CI. A separate manual provider
 check on 2026-10-17T20:48:38Z returned 169 records and all 168 future slots for one
 Sacramento-area coordinate. That is not a statewide availability guarantee.
+# California locations
+
+Search: `/api/v1/locations/search?q=Stockton&limit=10`; boundary:
+`/api/v1/locations/place-ca-stockton/boundary`. Offline indexed Census geography,
+dataset provenance, aliases, ZCTA limitations, frontend/weather behavior and
+HTTPS deployment configuration: [location handoff](LOCATIONS_INTEGRATION.md).
+Deployments must include the existing `frontend/public/data` geography or set
+`LOCATIONS_DATA_DIR`. ML cell mapping is explicitly unavailable pending its contract.

@@ -25,3 +25,12 @@ For the IBM Datathon. California-only current NASA thermal anomaly monitoring + 
 - Don't share NASA FIRMS or LLM API keys in Git.
 
 **References:** https://firms.modaps.eosdis.nasa.gov/api/area/ , https://open-meteo.com/en/docs/historical-weather-api , https://maplibre.org/maplibre-gl-js/docs/examples/3d-terrain/ , https://www.firemap.live/
+# California location search
+
+The backend serves indexed Census location search and boundaries under
+`/api/v1/locations` (compatible `/places` aliases). The existing map search now
+loads boundaries and real point weather/wind through FastAPI when an API URL is
+configured. [Sources, API contracts, ZCTA accuracy and deployment setup](backend/LOCATIONS_INTEGRATION.md).
+GitHub Pages deploys on every push to main; use repository variable
+`VITE_API_BASE_URL` or runtime `?api=https://<backend>/api/v1` for a separately
+hosted HTTPS backend. An empty URL retains explicitly labeled sample mode.

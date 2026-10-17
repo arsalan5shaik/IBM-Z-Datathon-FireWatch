@@ -229,9 +229,10 @@ export function PlacePanel({ place }: { place: PlaceResult }) {
           />
         </>
       )}
-      <Section title="Conditions at this hour" aside={<span className="section__aside">{summary && summary.count > 1 ? 'highest-risk cell' : 'center'}</span>}>
-        <Conditions ex={ex.data} weather={w} units={units} />
+      <Section title="Conditions at this hour" aside={<span className="section__aside">representative point</span>}>
+        <Conditions ex={null} weather={w} units={units} />
       </Section>
+      {place.type === 'county' && <Note>Representative-point weather does not describe every part of this county.</Note>}
       {maxCellId && <WhySection ex={ex.data} loading={ex.loading} error={ex.error} units={units} />}
       <NearbyFires point={place.center} km={radius} />
       {place.type === 'zip' && <Note>ZIP code areas are Census ZCTA approximations — not exact USPS delivery boundaries.</Note>}

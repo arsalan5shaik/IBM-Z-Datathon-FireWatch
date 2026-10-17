@@ -1,8 +1,8 @@
 # Frontend / backend integration
 
-Verified locally on 2026-10-17 using main `a9681ac` (weather PR #4 and NASA FIRMS PR #5 merged).
+Verified locally on 2026-10-17 with the NASA integration checkpoint and main `1eea277` (FIRMS, weather, elevation and location-search updates).
 The authoritative route contract is `FireWatch_Backend_Architecture.md`; adapters live in `src/api/`.
-No additional React app, map instance, dependencies, or backend source changes were introduced.
+This feature adds no React app, map instance, dependency or backend source edit; upstream backend changes are preserved.
 
 ## Run on Windows (two terminals)
 
@@ -54,12 +54,24 @@ satellite coverage. Cached detections remain satellite thermal anomalies, not co
 | GET /forecasts/risk?bbox&hour | Implemented; currently 503 forecast_not_ready | Explicit unavailable state, no sample substitution |
 | GET /forecasts/cell/{cell_id} | Implemented; needs validated artifacts | Only received values; missing values stay missing |
 | GET /wind?bbox&hour&density | Implemented by weather PR #4 | Existing arrows/conditions, exact selected hour, provider freshness |
-| GET /weather?latitude&longitude&hour | Implemented | Optional point weather; current panels use /wind samples |
+| GET /weather?latitude&longitude&hour | Implemented | Selected-location weather at Census representative coordinates, plus bounded /wind samples |
+| GET /locations/search?q&limit | Implemented by PR #8 | Debounced California suggestions; explicit API error without silent static fallback |
+| GET /locations/{id}/boundary | Implemented by PR #8 | Selected Census boundary; /places aliases retained |
 | GET /fires/incidents?bbox | Not implemented | 404 means no official feed; no fictional incident names |
 | GET /explain/{cell_id}?hour | Planned/unavailable | No invented SHAP contributions |
 | POST /chat | Planned/unavailable | Labeled offline assistant grounded in loaded data |
 
-Search/boundaries continue to use bundled Census data, not a new geocoding service.
+In API mode, search and boundaries use `/locations/*`, serving the same Census data as the bundled
+local context index; explicit sample mode uses bundled files. No new geocoding service was introduced.
+Location selection calls `/weather` at Census representative coordinates and `/wind` in a bounded
+surrounding region at the same UTC timeline hour. Previous-location weather is cleared immediately;
+old boundary/weather requests are cancelled or ignored, including ABA selection changes. County
+weather describes a representative point, not every part of the county. No sample weather replaces
+an unavailable API response. Source coordinates, forecast hour and provider refresh time are shown.
+Dataset sources, two corrected ambiguous place IDs, missing ML mapping and the public HTTPS backend
+setup are documented in `backend/LOCATIONS_INTEGRATION.md`. Upstream corrected Census boundaries,
+verification scripts and tests are preserved. Pages uses the optional repository Actions variable
+`VITE_API_BASE_URL`; the runtime `?api=` override remains supported.
 
 ## NASA GeoJSON adapter
 
@@ -112,7 +124,7 @@ npm.cmd run typecheck
 npm.cmd run build
 ```
 
-Main has no frontend lint script. During local verification, the already installed Oxlint executable
+The synchronized frontend has no lint script. During local verification, the already installed Oxlint executable
 from the preserved older frontend was used read-only; no lint dependency was added. It reported two
 pre-existing warnings (empty spread fallbacks in store.ts and panels/shared.tsx).
 The merged backend passed 249 tests, Ruff lint/format, both smoke modes and Linux/Windows CI.

@@ -192,6 +192,7 @@ export const weatherFrame = (grid: WeatherGrid, t: number) => {
 export function weatherAtIndex(grid: WeatherGrid, i: number, t: number): PointWeather {
   const k = weatherFrame(grid, t) * grid.points.length + i;
   return {
+    sampling_coordinates: grid.points[i],
     fetched_at: grid.metadata.fetched_at,
     complete: grid.metadata.complete,
     cache_status: grid.metadata.cache_status,
