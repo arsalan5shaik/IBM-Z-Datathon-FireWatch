@@ -26,7 +26,7 @@ try {
       hours.push(hour);
       return route.fulfill({ json: { type: 'FeatureCollection', metadata: {
         source: 'Open-Meteo', data_kind: 'forecast', forecast_hour: hour,
-        fetched_at: new Date().toISOString(), cache_status: 'stale', complete: true,
+        fetched_at: new Date().toISOString(), cache_status: 'stale', complete: false,
       }, features: [[-121.5, 38.5, 20], [-118, 34, 25]].map(([lon, lat, temperature]) => ({
         type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] }, properties: {
           temperature_c: temperature, relative_humidity_pct: 30, precipitation_mm: 0,
@@ -51,6 +51,7 @@ try {
   await page.getByText(/Open-Meteo · forecast/).first().waitFor();
   assert.match(await page.locator('body').innerText(), /20\s*°C/);
   assert.match(await page.locator('body').innerText(), /stale/);
+  assert.match(await page.locator('body').innerText(), /partial coverage/);
   await page.waitForFunction(() => window.__fwMap.getSource('fw-wind').serialize().data?.features?.some(f => f.properties.d === 270));
   const firstHour = hours.at(-1);
   await page.getByRole('button', { name: 'Next hour', exact: true }).click();

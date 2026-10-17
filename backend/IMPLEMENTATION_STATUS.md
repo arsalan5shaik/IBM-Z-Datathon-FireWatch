@@ -11,8 +11,8 @@
   timeline/location/wind/weather integration, freshness/error handling, and proposed
   normalized inference-input export with complete-grid mapping validation.
 - Commits pushed: `6be1be3` provider, `108f000` cache/revisions, `19d2354` APIs,
-  `322600f` frontend, `3af6229` proposed ML handoff/process locking. Final tests,
-  browser harness, documentation and CI wiring are being verified before PR.
+  `322600f` frontend, `3af6229` proposed ML handoff/process locking, and `c60c37c`
+  final tests, browser harness, documentation and CI wiring.
 - Targeted provider/cache/API/contract and frontend tests pass. TypeScript passes.
   Chrome browser smoke passed location, timeline, wind direction/layer, freshness
   and outage clearing with mock API responses. A manual live provider check at
@@ -25,8 +25,9 @@
 - Limits: coarse display sampling is not 3 km weather/native provider resolution;
   California bbox is not authoritative geometry. No statewide inference or
   LinuxONE verification is claimed. Other provider/features stay outside scope.
-- PR/merge: final verification pending; open PR into main after passing checks.
-  No automatic merge; explicit requester approval is required.
+- PR/merge: [PR #4](https://github.com/arsalan5shaik/IBM-Z-Datathon-FireWatch/pull/4)
+  is open against main. Final CI is tracked on that PR. No automatic merge;
+  explicit requester approval is required.
 - Final local verification: **177 backend tests passed** (93.28 s), Ruff lint and
   format check passed (55 files), both backend HTTP smoke variants passed.
   **27 frontend tests passed**, TypeScript/production build passed, and the Chrome

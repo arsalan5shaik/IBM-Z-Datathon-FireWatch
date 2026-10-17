@@ -43,6 +43,7 @@ describe('weather forecast integration', () => {
     expect(result.wind_speed_kmh[0]).toBe(36);
     expect(result.metadata.cache_status).toBe('stale');
     expect(result.metadata.complete).toBe(false);
+    expect(weatherAtPoint(result, [-120, 36.5], NOW)?.complete).toBe(false);
   });
 
   it('rejects mismatched forecast hours and provider errors', async () => {

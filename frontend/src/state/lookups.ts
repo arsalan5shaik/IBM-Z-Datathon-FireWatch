@@ -193,6 +193,7 @@ export function weatherAtIndex(grid: WeatherGrid, i: number, t: number): PointWe
   const k = weatherFrame(grid, t) * grid.points.length + i;
   return {
     fetched_at: grid.metadata.fetched_at,
+    complete: grid.metadata.complete,
     cache_status: grid.metadata.cache_status,
     source: grid.metadata.source,
     temperature_c: grid.temperature_c[k],

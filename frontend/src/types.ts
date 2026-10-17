@@ -141,6 +141,7 @@ export interface WeatherGrid {
   precipitation_mm: Float32Array;
 }
 export interface PointWeather {
+  complete?: boolean;
   fetched_at?: string;
   cache_status?: 'fresh' | 'stale';
   source?: string;
