@@ -25,14 +25,18 @@ and boundaries (US Census, bundled) are all keyless.
 |---|---|---|
 | **Sample** (default) | no configuration, or `?demo=1` | Everything generated in the browser relative to the current hour; badge **SAMPLE DATA** |
 | **Backend** | build with `VITE_API_BASE_URL=/api/v1`, or open `?api=https://host/api/v1` | Data from the FireWatch API; badge **Live** |
-| **Fallback** | backend configured but a request fails | That dataset switches to sample data; badge **API offline · Sample** + retry banner |
+| **Fallback** | backend configured but a route fails or isn't built yet | Only that layer uses sample data; badge **Live + sample layers** (or **API offline · Sample**) + retry banner |
 
-Endpoints, shapes and what is required vs optional are in **[API_INTEGRATION.md](API_INTEGRATION.md)**.
+The client follows the backend routes in `FireWatch_Backend_Architecture.md` §7 (`/forecasts/risk` bbox+hour tiles,
+`/forecasts/cell`, `/fires/live`, `/wind`, `/explain`, `/chat`). Endpoints, fields, fallbacks and open items are in
+**[API_INTEGRATION.md](API_INTEGRATION.md)**. In backend mode the 3 km risk grid loads for the visible area, so
+the statewide view asks you to zoom in.
 
 Mock backend for development (serves the API contract from the sample generator):
 
 ```bash
 FIREWATCH_MOCK_API=1 npm run dev     # then open http://localhost:5173/?api=/api/v1
+FIREWATCH_MOCK_ONLY=forecasts ...     # only the routes backend/ implements today; the rest 404
 FIREWATCH_MOCK_CHAT=503 ...           # make /chat fail to exercise the offline-assistant fallback
 ```
 

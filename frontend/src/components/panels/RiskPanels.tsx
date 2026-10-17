@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Building2, Crosshair, Hash, Home, Map as MapIcon, Radar, Sparkles, X } from 'lucide-react';
 import { askAbout, clearSearch } from '../../state/actions';
-import { cellsForPlace, riskIndex, seriesForCells, summarizeCells, weatherAtPoint } from '../../state/lookups';
+import { requestCellHistory, requestRiskArea } from '../../state/data';
+import { cellsForPlace, describePoint, riskIndex, seriesForCells, summarizeCells, weatherAtPoint } from '../../state/lookups';
 import { effectiveIndex, setTimeIndex, timelineOf, useStore } from '../../state/store';
 import { fitBbox, flyToPoint } from '../../map/mapRef';
 import { bboxOfGeometry, type LngLat } from '../../lib/geo';
@@ -22,6 +23,15 @@ function useTimeline() {
 }
 
 function RiskHeadline({ score, scoreType, t, extra }: { score: number; scoreType?: string; t: number; extra?: string }) {
+  if (!Number.isFinite(score))
+    return (
+      <div className="risk-card risk-card--low">
+        <div className="risk-card__main">
+          <span className="risk-card__level">Unavailable</span>
+        </div>
+        <div className="risk-card__when">No forecast value for {formatValidTime(t)} — it may still be loading or missing from the published forecast.</div>
+      </div>
+    );
   const key = riskLevelKey(score);
   return (
     <div className={`risk-card risk-card--${key}`} style={{ ['--c' as string]: riskColor(Math.max(0.2, score)) }}>
@@ -64,11 +74,14 @@ function ModelFoot({ cellId }: { cellId?: string | null }) {
 export function CellPanel({ cellId, lngLat }: { cellId: string; lngLat: LngLat }) {
   const grid = useStore((s) => s.risk.data);
   const weather = useStore((s) => s.weather.data);
+  const weatherOrigin = useStore((s) => s.weather.origin);
+  const index = useStore((s) => s.places.data);
   const units = useStore((s) => s.units);
   const { tl, idx, t } = useTimeline();
   const i = grid ? riskIndex(grid).byId.get(cellId) : undefined;
   const cell = i != null ? grid!.cells[i] : null;
   const ex = useExplanation(cell ? cellId : null, t);
+  useEffect(() => requestCellHistory(cellId), [cellId, !!cell]);
   const series = useMemo(() => {
     if (!grid || i == null) return [];
     return seriesForCells(grid, [i], Array.from({ length: tl.frames }, (_, k) => tl.start + k * HOUR_MS));
@@ -86,16 +99,23 @@ export function CellPanel({ cellId, lngLat }: { cellId: string; lngLat: LngLat }
   const p = cell.properties;
   const center: LngLat = typeof p.lon === 'number' && typeof p.lat === 'number' ? [p.lon, p.lat] : lngLat;
   const w = weatherAtPoint(weather, center, t);
-  const title = p.near ? `Near ${p.near}` : 'Forecast area';
+  const where = describePoint(index, center, p);
+  const title = where.near ? `Near ${where.near}` : 'Forecast area';
+  // Conditions come from the model explanation when it has them; otherwise from the weather layer.
+  const conditionsFromWeather = ex.data?.conditions?.temperature_c == null;
 
   return (
     <PanelShell
       icon={<Radar size={18} />}
       title={title}
-      subtitle={`${p.county ? `${p.county} County · ` : ''}~${cellWidthKm(cell.geometry)} km forecast cell`}
+      subtitle={`${where.county ? `${where.county} County · ` : ''}~${cellWidthKm(cell.geometry)} km forecast cell`}
       actions={
         <>
-          <button type="button" className="btn btn--primary" onClick={() => askAbout(`Why is this area ${riskLabel(riskLevelKey(score)).toLowerCase()} risk at this hour?`)}>
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => askAbout(Number.isFinite(score) ? `Why is this area ${riskLabel(riskLevelKey(score)).toLowerCase()} risk at this hour?` : 'What do you know about this area at this hour?')}
+          >
             <Sparkles size={16} /> Ask AI about this area
           </button>
           <button type="button" className="btn btn--ghost" onClick={() => fitBbox(bboxOfGeometry(cell.geometry), 11)}>
@@ -115,7 +135,7 @@ export function CellPanel({ cellId, lngLat }: { cellId: string; lngLat: LngLat }
         scoreType={md.score_type}
         onPick={(k) => setTimeIndex(k)}
       />
-      <Section title="Conditions at this hour">
+      <Section title="Conditions at this hour" aside={conditionsFromWeather ? <OriginTag origin={weatherOrigin} /> : undefined}>
         <Conditions ex={ex.data} weather={w} units={units} />
       </Section>
       <WhySection ex={ex.data} loading={ex.loading} error={ex.error} units={units} />
@@ -142,6 +162,7 @@ export function PlacePanel({ place }: { place: PlaceResult }) {
   const units = useStore((s) => s.units);
   const boundary = useStore((s) => (s.highlight?.place.id === place.id ? s.highlight.boundary : null));
   const { tl, idx, t } = useTimeline();
+  useEffect(() => requestRiskArea(place.bbox, t), [place, t]);
   const cells = useMemo(() => (grid ? cellsForPlace(grid, place, boundary) : []), [grid, place, boundary]);
   const series = useMemo(
     () => (grid && cells.length ? seriesForCells(grid, cells, Array.from({ length: tl.frames }, (_, k) => tl.start + k * HOUR_MS)) : []),
@@ -150,6 +171,9 @@ export function PlacePanel({ place }: { place: PlaceResult }) {
   const summary = grid && cells.length ? summarizeCells(grid, cells, t) : null;
   const maxCellId = summary && summary.maxCell >= 0 ? grid!.cells[summary.maxCell].properties.cell_id : null;
   const ex = useExplanation(maxCellId, t);
+  useEffect(() => {
+    if (maxCellId) requestCellHistory(maxCellId);
+  }, [maxCellId]);
   const w = weatherAtPoint(weather, place.center, t);
   const pop = formatPopulation(place.population);
   const radius = place.type === 'county' ? 20 : 30;

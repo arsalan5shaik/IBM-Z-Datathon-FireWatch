@@ -1,6 +1,6 @@
 import { Crosshair, ExternalLink, Flame, Satellite, Sparkles } from 'lucide-react';
 import { askAbout } from '../../state/actions';
-import { cellIndexAt } from '../../state/lookups';
+import { cellIndexAt, describePoint } from '../../state/lookups';
 import { select, useStore } from '../../state/store';
 import { fitBbox, flyToPoint } from '../../map/mapRef';
 import { bboxOfGeometry, bboxOfPoints, padBbox, type LngLat } from '../../lib/geo';
@@ -12,11 +12,11 @@ import { NearbyFires, PanelShell } from './shared';
 
 function useLocationLabel(p: LngLat): string {
   const grid = useStore((s) => s.risk.data);
-  if (!grid) return `${p[1].toFixed(4)}, ${p[0].toFixed(4)}`;
-  const i = cellIndexAt(grid, p);
-  const props = i >= 0 ? grid.cells[i].properties : null;
-  const near = props?.near ? `near ${props.near}` : '';
-  const county = props?.county ? `${props.county} County` : '';
+  const index = useStore((s) => s.places.data);
+  const i = grid ? cellIndexAt(grid, p) : -1;
+  const where = describePoint(index, p, i >= 0 ? grid!.cells[i].properties : null);
+  const near = where.near ? `near ${where.near}` : '';
+  const county = where.county ? `${where.county} County` : '';
   return [near, county].filter(Boolean).join(', ') || `${p[1].toFixed(4)}, ${p[0].toFixed(4)}`;
 }
 

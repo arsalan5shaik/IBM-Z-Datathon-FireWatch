@@ -6,7 +6,7 @@ import { formatHour, formatWeekday } from '../lib/time';
 import { fitBbox, flyToPoint } from '../map/mapRef';
 import type { PlaceResult, Selection } from '../types';
 import { sendChat } from './chat';
-import { cellIndexAt } from './lookups';
+import { cellIndexAt, describePoint } from './lookups';
 import { getState, select, setState, toast, validTimeOf, type ChatContext } from './store';
 
 const RECENT_KEY = 'recent-places';
@@ -95,7 +95,8 @@ export function contextFor(sel: Selection | null): ChatContext | null {
       return { label: `${placeTitle(sel.place)} · ${when}`, placeId: sel.place.id, lngLat: sel.place.center };
     case 'cell': {
       const cell = s.risk.data?.cells.find((c) => c.properties.cell_id === sel.cellId);
-      const near = cell?.properties.near ? `near ${cell.properties.near}` : sel.cellId;
+      const where = describePoint(s.places.data, sel.lngLat, cell?.properties);
+      const near = where.near ? `near ${where.near}` : sel.cellId;
       return { label: `Area ${near} · ${when}`, cellId: sel.cellId, lngLat: sel.lngLat };
     }
     case 'hotspot': {

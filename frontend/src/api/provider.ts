@@ -24,7 +24,8 @@ export interface DataProvider {
   /** Illustrative influence polygons, or null to let the client derive them from detections. */
   getCoverage(lookbackHours: number): Promise<CoverageCollection | null>;
   getRisk(): Promise<RiskGrid>;
-  getWeather(): Promise<WeatherGrid>;
+  /** Hourly weather grid. Backends that serve one hour at a time return a single-frame grid for `validAtMs`. */
+  getWeather(validAtMs?: number): Promise<WeatherGrid>;
   explain(cellId: string, validAtMs: number): Promise<Explanation>;
   chat(req: ChatRequest): Promise<ChatResponse>;
 }

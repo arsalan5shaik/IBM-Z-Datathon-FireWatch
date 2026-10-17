@@ -28,6 +28,8 @@ function useTrend(frames: number, start: number) {
       label = `Highest risk score in ${selection.place.name}`;
     }
     if (cells?.length) return { values: seriesForCells(risk, cells, hours), label, absolute: true };
+    // Backend mode only holds the area on screen, so a statewide trend would mislead.
+    if (risk.metadata.sparse) return null;
     const share = statewideShare(risk);
     const md = risk.metadata;
     const values = hours.map((h) => share[Math.max(0, Math.min(md.frames - 1, Math.floor((h - Date.parse(md.forecast_start)) / (md.step_minutes * 60_000))))]);
@@ -39,7 +41,8 @@ function useTrend(frames: number, start: number) {
 function Sparkline({ values }: { values: number[] }) {
   const n = values.length;
   if (n < 2) return null;
-  const pts = values.map((v, i) => `${((i / (n - 1)) * 1000).toFixed(1)},${(40 - Math.max(0, Math.min(1, v)) * 36).toFixed(1)}`);
+  // Decorative background: missing hours sit on the baseline (the panel chart shows real gaps).
+  const pts = values.map((v, i) => `${((i / (n - 1)) * 1000).toFixed(1)},${(40 - Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0)) * 36).toFixed(1)}`);
   return (
     <svg className="timeline__trend" viewBox="0 0 1000 40" preserveAspectRatio="none" aria-hidden>
       <defs>
@@ -114,7 +117,7 @@ function CalendarPopover({ onClose }: { onClose: () => void }) {
   const day = segments.find((d) => d.key === dayKey) ?? current;
   const hours = day ? Array.from({ length: day.endIndex - Math.max(day.startIndex, tl.liveIndex) + 1 }, (_, k) => Math.max(day.startIndex, tl.liveIndex) + k) : [];
   const peak = useMemo(() => {
-    if (!risk) return null;
+    if (!risk || risk.metadata.sparse) return null;
     const share = statewideShare(risk);
     let best = tl.liveIndex;
     let bestV = -1;
@@ -255,7 +258,7 @@ export function Timeline() {
   const atEnd = idx >= tl.frames - 1;
   const hoursAhead = idx - tl.liveIndex;
   const label = isLive ? 'Now' : dayName(t, now);
-  const peakValue = trend?.absolute ? trend.values[idx] : null;
+  const peakValue = trend?.absolute && Number.isFinite(trend.values[idx]) ? trend.values[idx] : null;
 
   return (
     <div className="timeline" ref={rootRef} role="group" aria-label="Forecast timeline (hourly)">
@@ -268,7 +271,7 @@ export function Timeline() {
           <span>
             {formatMonthDay(t)}, {formatHour(t)} {tzAbbrev(t)}
           </span>
-          <span className="timeline__ahead">{isLive ? 'current hour' : `+${hoursAhead} h forecast`}</span>
+          <span className="timeline__ahead">{isLive ? (t > now ? 'next forecast hour' : 'current hour') : `+${hoursAhead} h forecast`}</span>
           {peakValue != null && <span className="timeline__score">score {scoreValue(peakValue, scoreType)}</span>}
           {riskLoading && <span className="timeline__ahead">loading forecast…</span>}
         </div>

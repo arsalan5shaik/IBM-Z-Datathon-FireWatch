@@ -33,9 +33,18 @@ export function RiskSparkline({
   const W = 1000, H = 100, PAD = 6;
   const x = (i: number) => (i / (n - 1)) * W;
   const y = (v: number) => PAD + (1 - Math.max(0, Math.min(1, v))) * (H - PAD * 2);
-  const visible = values.map((v, i) => [i, v] as const).filter(([i]) => i >= firstIndex);
-  const line = visible.map(([i, v]) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' L');
-  const area = `M${x(visible[0][0]).toFixed(1)},${H} L${line} L${x(n - 1)},${H} Z`;
+  // Contiguous runs of known values; missing hours (NaN) leave gaps instead of dropping to zero.
+  const runs: [number, number][][] = [];
+  values.forEach((v, i) => {
+    if (i < firstIndex || !Number.isFinite(v)) return;
+    const last = runs[runs.length - 1];
+    if (last && last[last.length - 1][0] === i - 1) last.push([i, v]);
+    else runs.push([[i, v]]);
+  });
+  const linePath = runs.map((r) => `M${r.map(([i, v]) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' L')}`).join(' ');
+  const areaPath = runs
+    .map((r) => `M${x(r[0][0]).toFixed(1)},${H} L${r.map(([i, v]) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' L')} L${x(r[r.length - 1][0]).toFixed(1)},${H} Z`)
+    .join(' ');
   const days = daySegments(start, HOUR_MS, n).slice(1);
   const pct = (i: number) => `${(i / (n - 1)) * 100}%`;
 
@@ -59,7 +68,7 @@ export function RiskSparkline({
         aria-valuemin={firstIndex}
         aria-valuemax={n - 1}
         aria-valuenow={shown}
-        aria-valuetext={`${formatWeekday(t)} ${formatHour(t)}: ${riskLabel(riskLevelKey(v))}, score ${scoreValue(v, scoreType)}`}
+        aria-valuetext={`${formatWeekday(t)} ${formatHour(t)}: ${Number.isFinite(v) ? `${riskLabel(riskLevelKey(v))}, score ${scoreValue(v, scoreType)}` : 'no forecast'}`}
         onPointerMove={(e) => setHover(indexAt(e.clientX))}
         onPointerLeave={() => setHover(null)}
         onClick={(e) => onPick(indexAt(e.clientX))}
@@ -85,8 +94,8 @@ export function RiskSparkline({
           {days.map((d) => (
             <line key={d.key} x1={x(d.startIndex)} x2={x(d.startIndex)} y1="0" y2={H} className="spark__day" vectorEffect="non-scaling-stroke" />
           ))}
-          <path d={area} className="spark__area" />
-          <path d={`M${line}`} className="spark__line" stroke="url(#spark-stroke)" vectorEffect="non-scaling-stroke" />
+          <path d={areaPath} className="spark__area" />
+          <path d={linePath} className="spark__line" stroke="url(#spark-stroke)" vectorEffect="non-scaling-stroke" />
         </svg>
         <span className="spark__gridlabel" style={{ top: `${y(0.8)}%` }}>
           Extreme
@@ -95,10 +104,17 @@ export function RiskSparkline({
           High
         </span>
         <span className="spark__cursor" style={{ left: pct(shown) }} />
-        <span className="spark__dot" style={{ left: pct(shown), top: `${y(v)}%` }} />
+        {Number.isFinite(v) && <span className="spark__dot" style={{ left: pct(shown), top: `${y(v)}%` }} />}
+        {!runs.length && <span className="spark__empty">Hourly values not loaded</span>}
         {hover != null && (
           <span className={`spark__tip${shown / (n - 1) > 0.6 ? ' is-left' : ''}`} style={{ left: pct(shown) }}>
-            <strong>{scoreValue(v, scoreType)}</strong> {riskLabel(riskLevelKey(v))}
+            {Number.isFinite(v) ? (
+              <>
+                <strong>{scoreValue(v, scoreType)}</strong> {riskLabel(riskLevelKey(v))}
+              </>
+            ) : (
+              'No forecast'
+            )}
             <small>
               {formatWeekday(t)} {formatHour(t)}
             </small>

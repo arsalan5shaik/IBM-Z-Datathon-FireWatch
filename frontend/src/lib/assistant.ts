@@ -6,7 +6,7 @@
 import { FUEL_CLASSES, OFFICIAL_LINKS } from '../config';
 import { loadBoundary } from '../api/static';
 import { getExplanation } from '../state/data';
-import { cellIndexAt, cellsForPlace, groupsNear, seriesForCells, statewideShare, summarizeCells, weatherAtPoint } from '../state/lookups';
+import { cellIndexAt, cellsForPlace, describePoint, groupsNear, seriesForCells, statewideShare, summarizeCells, weatherAtPoint } from '../state/lookups';
 import { timelineOf, type AppState, type ChatContext } from '../state/store';
 import type { ChatResponse, Explanation, Grounding, PlaceResult } from '../types';
 import { bearingDeg, compass8, compass16, type LngLat } from './geo';
@@ -59,7 +59,7 @@ async function resolveLocation(s: AppState, text: string, ctx: ChatContext | nul
   if (!ctx?.lngLat) return null;
   const p = ctx.lngLat;
   const i = grid ? (ctx.cellId ? grid.cells.findIndex((c) => c.properties.cell_id === ctx.cellId) : cellIndexAt(grid, p)) : -1;
-  const near = i >= 0 ? grid!.cells[i].properties.near : null;
+  const near = describePoint(s.places.data, p, i >= 0 ? grid!.cells[i].properties : null).near;
   const base = ctx.label.split(' · ')[0];
   return { label: near && !ctx.incidentId ? `the area near ${near}` : base, point: p, place: null, cellIndexes: i >= 0 ? [i] : [] };
 }
@@ -235,7 +235,9 @@ export async function answerOffline(message: string, s: AppState, ctx: ChatConte
           : `No satellite hotspots were detected in the last ${s.lookbackHours} h.`,
       );
     }
-    if (grid && (!wantsFires || wantsWhere)) {
+    if (grid?.metadata.sparse && (!wantsFires || wantsWhere)) {
+      parts.push('A statewide ranking isn’t available here: in live mode the map loads the 3 km forecast only for the area you’re viewing. Search for a place or zoom in, then ask again.');
+    } else if (grid && (!wantsFires || wantsWhere)) {
       ground('risk', md?.generated_at);
       const f = Math.max(0, Math.min(grid.metadata.frames - 1, Math.floor((t - Date.parse(grid.metadata.forecast_start)) / (grid.metadata.step_minutes * 60_000))));
       const n = grid.cells.length;
@@ -283,7 +285,9 @@ export async function answerOffline(message: string, s: AppState, ctx: ChatConte
       : gridWeather;
   const generic = !wantsWhy && !wantsFires && !wantsWind && !wantsWeather && !wantsPeak;
 
-  if (summary && (generic || wantsWhy || wantsPeak || /risk|danger|level|score|how (bad|high)/.test(q))) {
+  if (summary && !Number.isFinite(summary.max) && (generic || wantsWhy || wantsPeak || /risk|danger|level|score/.test(q))) {
+    parts.push(`The forecast for ${loc.label} at ${when(t)} isn’t loaded or wasn’t published for that hour, so I can’t give a risk level.`);
+  } else if (summary && (generic || wantsWhy || wantsPeak || /risk|danger|level|score|how (bad|high)/.test(q))) {
     ground('risk', md?.generated_at);
     const level = riskLabel(riskLevelKey(summary.max));
     const area = loc.cellIndexes.length > 1 ? ` (highest of ${loc.cellIndexes.length} forecast cells in the area)` : '';

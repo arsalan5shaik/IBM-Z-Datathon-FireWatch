@@ -28,8 +28,8 @@ const SAMPLE_FIRES: SampleFire[] = [
   { id: 'inc-mount-lowe', name: 'Mount Lowe Fire', origin: [-118.06, 34.28], ageH: 21, axisDeg: 238, growth: 0.27, widthRatio: 0.38, intensity: 0.85, containment: null, status: 'Active' },
   { id: 'inc-pine-flat', name: 'Pine Flat Fire', origin: [-119.29, 36.85], ageH: 27, axisDeg: 48, growth: 0.2, widthRatio: 0.55, intensity: 0.6, containment: 5, status: 'Active' },
   { id: 'inc-mill-creek', name: 'Mill Creek Fire', origin: [-123.03, 39.41], ageH: 15, axisDeg: 118, growth: 0.15, widthRatio: 0.5, intensity: 0.45, containment: null, status: 'Active' },
-  { id: 'inc-laguna-rim', name: 'Laguna Rim Fire', origin: [-116.5, 32.86], ageH: 9.5, axisDeg: 248, growth: 0.32, widthRatio: 0.45, intensity: 0.7, containment: null, status: 'New' },
-  { id: 'inc-cuesta-grade', name: 'Cuesta Grade Fire', origin: [-120.62, 35.35], ageH: 10, axisDeg: 152, growth: 0.12, widthRatio: 0.6, intensity: 0.35, containment: 60, status: 'Active' },
+  { id: 'inc-laguna-rim', name: 'Laguna Rim Fire', origin: [-116.5, 32.86], ageH: 14, axisDeg: 248, growth: 0.32, widthRatio: 0.45, intensity: 0.7, containment: null, status: 'New' },
+  { id: 'inc-cuesta-grade', name: 'Cuesta Grade Fire', origin: [-120.62, 35.35], ageH: 16, axisDeg: 152, growth: 0.12, widthRatio: 0.6, intensity: 0.35, containment: 60, status: 'Active' },
 ];
 
 /** Isolated heat sources (agricultural burns, industrial flares) with no incident. */

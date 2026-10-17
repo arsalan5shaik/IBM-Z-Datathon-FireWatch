@@ -116,6 +116,8 @@ export interface AppState extends Prefs {
 
   map: MapInfo;
   online: boolean;
+  /** Backend mode only: whether the visible area's forecast tiles are loaded. */
+  riskCoverage: 'ok' | 'zoom-in' | 'loading' | 'missing-hour' | 'error' | null;
 }
 
 const saved = loadJson<Partial<Prefs>>('prefs', {});
@@ -153,6 +155,7 @@ export const useStore = create<AppState>()(
 
     map: { ready: false, styleFallback: false, terrainError: false, webglError: false, zoom: 5, bearing: 0, pitch: 0, center: [-119.5, 37.2] },
     online: typeof navigator === 'undefined' ? true : navigator.onLine,
+    riskCoverage: null,
   })),
 );
 

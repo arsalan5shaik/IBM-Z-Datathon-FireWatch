@@ -7,6 +7,7 @@ import { distanceKm, type LngLat } from '../lib/geo';
 import { formatTempShort } from '../lib/format';
 import { HOUR_MS } from '../lib/time';
 import { nearestWeatherPoint, riskFrame, weatherAtIndex, weatherFrame, windAt } from '../state/lookups';
+import { requestRiskView } from '../state/data';
 import { getState, setState, useStore, validTimeOf, type AppState } from '../state/store';
 import type { LayerKey, WeatherGrid } from '../types';
 import { LAYER_GROUPS, SRC, riskFillOpacity, riskGlowOpacity, setVisible } from './layers';
@@ -156,9 +157,23 @@ export function startSync(map: MapLibreMap, markers: FireMarkers): () => void {
     lastFrame = f;
     const n = grid.cells.length;
     const base = f * n;
-    for (let i = 0; i < n; i++) map.setFeatureState({ source: SRC.cells, id: grid.cells[i].properties.cell_id }, { s: grid.scores[base + i] });
+    for (let i = 0; i < n; i++) {
+      const v = grid.scores[base + i];
+      map.setFeatureState({ source: SRC.cells, id: grid.cells[i].properties.cell_id }, { s: Number.isFinite(v) ? v : -1 });
+    }
   }
   sub((s) => [s.risk.data, validTimeOf(s)] as const, applyRisk, shallowArr);
+
+  // Backend mode: load the forecast tiles for what's on screen at the selected hour.
+  const requestView = () => {
+    const s = getState();
+    if (!s.layers.risk && !s.selection) return;
+    const b = map.getBounds();
+    requestRiskView([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()], validTimeOf(s));
+  };
+  map.on('moveend', requestView);
+  unsubs.push(() => map.off('moveend', requestView));
+  sub((s) => [validTimeOf(s), s.risk.origin, s.layers.risk] as const, requestView, shallowArr);
 
   // ---- wind + weather labels -------------------------------------------------------
   let lastW: { g: WeatherGrid | null; f: number; units: string } = { g: null, f: -1, units: '' };

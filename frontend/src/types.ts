@@ -25,8 +25,11 @@ export interface StatusResponse {
   runtime_arch?: string;
   model_version?: string;
   snapshots: { fires_at?: string | null; risk_at?: string | null; weather_at?: string | null };
-  data_mode: 'fixture' | 'live' | 'cached' | string;
+  data_mode: 'fixture' | 'live' | 'cached' | 'unavailable' | string;
   api_contract_version?: number;
+  /** Raw per-subsystem report from the backend's ServiceStatus, when available. */
+  forecast?: Record<string, unknown> | null;
+  providers?: Record<string, { status?: string; stale?: boolean; last_success_at?: string | null; source_observed_at?: string | null }> | null;
 }
 
 // ---- /fires ------------------------------------------------------------------
@@ -110,6 +113,14 @@ export interface RiskMetadata {
   frames: number;
   source: string;
   sample?: boolean;
+  /**
+   * Backend mode: cells and hours are loaded on demand for the visible area (the API serves
+   * bbox + hour slices), so scores are NaN where nothing has been loaded and statewide
+   * summaries are unavailable.
+   */
+  sparse?: boolean;
+  grid_version?: string;
+  published_at?: string;
 }
 export interface RiskGrid {
   metadata: RiskMetadata;
@@ -156,6 +167,8 @@ export interface Explanation {
   score_type: string;
   base_value: number;
   raw_score: number;
+  /** e.g. "log_odds" — contributions are in this unit, never percentage points. */
+  output_scale?: string;
   drivers: Driver[];
   conditions: Partial<PointWeather> & {
     fuel_moisture_pct?: number;

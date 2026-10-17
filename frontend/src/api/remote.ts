@@ -1,196 +1,259 @@
 /**
- * FireWatch backend provider (/api/v1). See frontend/API_INTEGRATION.md for the exact shapes.
- * Frozen endpoints from 02_API_CONTRACT.md are used as-is; the hourly endpoints are additive.
+ * FireWatch backend client — routes from FireWatch_Backend_Architecture.md §7 (prefix /api/v1).
+ * Implemented in backend/ today: /status, /forecasts/risk, /forecasts/cell/{id}.
+ * Planned routes (/fires/live, /fires/incidents, /wind, /explain, /chat) are parsed leniently;
+ * a 404 from a route that doesn't exist yet makes that dataset fall back to labelled sample data.
+ * See frontend/API_INTEGRATION.md.
  */
-import type { Feature, FeatureCollection, MultiPolygon, Point, Polygon } from 'geojson';
+import type { FeatureCollection, MultiPolygon, Point, Polygon } from 'geojson';
 import { HOUR_MS, floorHour, toIso } from '../lib/time';
-import { bboxOfGeometry, centroidOfGeometry } from '../lib/geo';
+import { centroidOfGeometry } from '../lib/geo';
 import { riskLevelKey } from '../lib/risk';
 import type {
-  CellFeature,
-  CellProps,
   ChatRequest,
   ChatResponse,
   CoverageCollection,
   Detection,
+  Driver,
   Explanation,
-  FiresMetadata,
   FiresSnapshot,
   Incident,
   IncidentsSnapshot,
   RiskGrid,
-  RiskMetadata,
   StatusResponse,
   WeatherGrid,
 } from '../types';
 import type { DataProvider } from './provider';
+import { ForecastTiles } from './forecastTiles';
 import { HttpError, fetchJson } from './http';
 
 type Area = Polygon | MultiPolygon;
+type Props = Record<string, unknown>;
 
-interface FiresResponse extends FeatureCollection<Point> {
-  metadata: FiresMetadata;
-}
-interface RiskResponse extends FeatureCollection<Area, CellProps & { scores?: number[]; risk_score?: number }> {
-  metadata: Partial<RiskMetadata> & { forecast_end?: string };
-}
-interface WeatherResponse {
-  metadata: WeatherGrid['metadata'];
-  points: [number, number][];
-  variables: Record<string, number[][]>;
-}
+/** California bbox accepted by the backend (≤ 110 square degrees). */
+const CA_BBOX = '-124.6,32.4,-114.0,42.1';
 
-const flat = (frames: number[][] | undefined, n: number, count: number) => {
-  const out = new Float32Array(count * n);
-  frames?.forEach((row, f) => row.forEach((v, i) => (out[f * n + i] = v ?? NaN)));
-  return out;
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'string' && v.trim() && Number.isFinite(Number(v)) ? Number(v) : null);
+const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
+const pick = (p: Props, ...keys: string[]) => {
+  for (const k of keys) if (p[k] != null) return p[k];
+  return undefined;
 };
 
 export class RemoteProvider implements DataProvider {
   readonly kind = 'api' as const;
-  constructor(private readonly base: string) {}
+  tiles: ForecastTiles | null = null;
+  /** Receives every updated sparse risk grid (wired to the store by state/data.ts). */
+  onRiskChange: (grid: RiskGrid) => void = () => undefined;
+
+  constructor(readonly base: string) {}
 
   private url(path: string, params?: Record<string, string | number>) {
     const q = params ? `?${new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]))}` : '';
     return `${this.base}${path}${q}`;
   }
 
-  getStatus() {
-    return fetchJson<StatusResponse>(this.url('/status'), { timeoutMs: 10_000 });
+  // ---- implemented ------------------------------------------------------------------------
+  async getStatus(): Promise<StatusResponse> {
+    const s = await fetchJson<Props>(this.url('/status'), { timeoutMs: 10_000 });
+    const forecast = (s.forecast as Props | undefined) ?? null;
+    const providers = (s.providers as StatusResponse['providers']) ?? null;
+    const at = (p?: { last_success_at?: string | null; source_observed_at?: string | null }) => p?.source_observed_at ?? p?.last_success_at ?? null;
+    return {
+      status: String(s.status ?? 'unknown'),
+      runtime_arch: str(s.runtime_arch) ?? undefined,
+      model_version: str(forecast?.model_version) ?? str(s.model_version) ?? undefined,
+      snapshots: {
+        fires_at: at(providers?.firms) ?? str((s.snapshots as Props | undefined)?.fires_at),
+        risk_at: str(forecast?.last_success_at) ?? str((s.snapshots as Props | undefined)?.risk_at),
+        weather_at: at(providers?.weather),
+      },
+      data_mode: String(s.data_mode ?? 'unavailable'),
+      api_contract_version: 1,
+      forecast,
+      providers,
+    };
   }
 
+  /**
+   * Returns the (initially empty) sparse grid after one probe request proves forecasts are
+   * served. Further tiles load as the map asks for them (requestView / requestHistory).
+   */
+  async getRisk(): Promise<RiskGrid> {
+    let start = Math.ceil(Date.now() / HOUR_MS) * HOUR_MS; // backend window starts at the next UTC hour
+    try {
+      const status = await this.getStatus();
+      const ws = str(status.forecast?.active_window_start);
+      if (ws) start = Date.parse(ws);
+    } catch {
+      /* status is advisory here */
+    }
+    this.tiles ??= new ForecastTiles(this.base, start, (g) => this.onRiskChange(g));
+    await this.tiles.probe([-119.6, 37.3]);
+    return this.tiles.snapshot();
+  }
+
+  // ---- planned (lenient parsing) ------------------------------------------------------------
   async getFires(lookbackHours: number): Promise<FiresSnapshot> {
-    const res = await fetchJson<FiresResponse>(this.url('/fires', { days: Math.ceil(lookbackHours / 24), hours: lookbackHours }));
-    const cutoff = Date.now() - lookbackHours * HOUR_MS;
+    const since = toIso(Date.now() - lookbackHours * HOUR_MS);
+    const res = await fetchJson<FeatureCollection<Point> & { metadata?: Props }>(this.url('/fires/live', { bbox: CA_BBOX, since }));
+    const cutoff = Date.parse(since);
     const detections: Detection[] = (res.features ?? [])
       .filter((f) => f.geometry?.type === 'Point')
       .map((f, i) => {
-        const p = (f.properties ?? {}) as Record<string, unknown>;
+        const p = (f.properties ?? {}) as Props;
+        const acquired = str(pick(p, 'acquired_at', 'acquisition_time', 'acq_datetime', 'observed_at', 'timestamp')) ?? '';
         return {
-          id: String(f.id ?? p.id ?? `det-${i}`),
+          id: String(f.id ?? pick(p, 'id', 'detection_id') ?? `det-${i}`),
           lon: f.geometry.coordinates[0],
           lat: f.geometry.coordinates[1],
-          acquired_at: String(p.acquired_at ?? ''),
-          sensor: String(p.sensor ?? 'VIIRS'),
-          frp_mw: typeof p.frp_mw === 'number' ? p.frp_mw : null,
-          confidence: String(p.confidence ?? 'nominal'),
-          display_weight: typeof p.display_weight === 'number' ? p.display_weight : 0.5,
-          daynight: (p.daynight as 'D' | 'N' | undefined) ?? null,
-          incident_id: (p.incident_id as string | undefined) ?? null,
+          acquired_at: acquired,
+          sensor: String(pick(p, 'sensor', 'satellite', 'source') ?? 'VIIRS'),
+          frp_mw: num(pick(p, 'frp_mw', 'frp')),
+          confidence: String(pick(p, 'confidence') ?? 'nominal'),
+          display_weight: num(p.display_weight) ?? 0.5,
+          daynight: (str(p.daynight) as 'D' | 'N' | null) ?? null,
+          incident_id: str(p.incident_id),
         };
       })
-      .filter((d) => Date.parse(d.acquired_at) >= cutoff);
-    return { metadata: res.metadata ?? { source: 'NASA FIRMS', generated_at: toIso(Date.now()) }, detections };
+      .filter((d) => !d.acquired_at || Date.parse(d.acquired_at) >= cutoff);
+    const md = res.metadata ?? {};
+    return {
+      metadata: {
+        source: str(md.source) ?? 'NASA FIRMS',
+        generated_at: str(pick(md, 'generated_at', 'fetched_at', 'last_success_at')) ?? toIso(Date.now()),
+        stale: md.stale === true,
+        not_fire_perimeter: true,
+        lookback_hours: lookbackHours,
+      },
+      detections,
+    };
   }
 
   async getIncidents(): Promise<IncidentsSnapshot> {
     try {
-      const res = await fetchJson<FeatureCollection<Area> & { metadata?: IncidentsSnapshot['metadata'] }>(this.url('/incidents'));
+      const res = await fetchJson<FeatureCollection<Area | null> & { metadata?: Props }>(this.url('/fires/incidents', { bbox: CA_BBOX }));
       const incidents: Incident[] = (res.features ?? []).map((f, i) => {
-        const p = (f.properties ?? {}) as Record<string, unknown>;
+        const p = (f.properties ?? {}) as Props;
         const geometry = f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon') ? f.geometry : null;
         const center = (p.center as [number, number] | undefined) ?? (geometry ? centroidOfGeometry(geometry) : [0, 0]);
         return {
-          id: String(f.id ?? p.id ?? `incident-${i}`),
-          name: String(p.name ?? p.incident_name ?? 'Unnamed incident'),
+          id: String(f.id ?? pick(p, 'incident_id', 'id') ?? `incident-${i}`),
+          name: String(pick(p, 'name', 'incident_name') ?? 'Unnamed incident'),
           official: p.official !== false,
-          source: String(p.source ?? res.metadata?.source ?? 'Official perimeter feed'),
-          updated_at: (p.updated_at as string | undefined) ?? null,
-          acres: typeof p.acres === 'number' ? p.acres : null,
-          containment_pct: typeof p.containment_pct === 'number' ? p.containment_pct : null,
-          status: (p.status as string | undefined) ?? null,
-          url: (p.url as string | undefined) ?? null,
+          source: String(pick(p, 'source') ?? str(res.metadata?.source) ?? 'Official incident feed'),
+          updated_at: str(pick(p, 'updated_at', 'last_updated', 'modified_at')),
+          acres: num(pick(p, 'acres', 'acreage', 'gis_acres')),
+          containment_pct: num(pick(p, 'containment_pct', 'containment', 'percent_contained')),
+          status: str(p.status),
+          url: str(p.url),
           geometry,
           center,
         };
       });
-      return { metadata: res.metadata ?? { source: 'Official perimeter feed', generated_at: toIso(Date.now()), official_perimeter: true }, incidents };
+      return {
+        metadata: { source: str(res.metadata?.source) ?? 'Official incident feed', generated_at: str(res.metadata?.generated_at) ?? toIso(Date.now()), official_perimeter: true },
+        incidents,
+      };
     } catch (err) {
-      // Perimeters are optional in the contract: a missing endpoint means "none available".
+      // Official perimeters are optional: "not available" is a valid, empty answer.
       if (err instanceof HttpError && err.status === 404)
-        return { metadata: { source: 'Not provided', generated_at: toIso(Date.now()), official_perimeter: true }, incidents: [] };
+        return { metadata: { source: 'No official perimeter feed configured', generated_at: toIso(Date.now()), official_perimeter: true }, incidents: [] };
       throw err;
     }
   }
 
-  async getCoverage(lookbackHours: number): Promise<CoverageCollection | null> {
-    try {
-      return await fetchJson<CoverageCollection>(this.url('/coverage', { days: Math.ceil(lookbackHours / 24) }));
-    } catch (err) {
-      if (err instanceof HttpError && err.status === 404) return null;
-      throw err;
-    }
+  async getCoverage(): Promise<CoverageCollection | null> {
+    return null; // the backend doesn't serve illustrative coverage; the client derives it
   }
 
-  async getRisk(): Promise<RiskGrid> {
-    let res: RiskResponse;
-    let hourly = true;
-    try {
-      res = await fetchJson<RiskResponse>(this.url('/risk/hourly', { horizon_hours: 168 }), { timeoutMs: 45_000 });
-    } catch (err) {
-      if (!(err instanceof HttpError && err.status === 404)) throw err;
-      // Frozen v1 endpoint: one 7-day score per cell. The timeline still works; the risk layer is constant.
-      res = await fetchJson<RiskResponse>(this.url('/risk', { horizon_days: 7 }), { timeoutMs: 45_000 });
-      hourly = false;
-    }
-    const cells = (res.features ?? []).filter((f) => f.geometry) as (Feature<Area, CellProps & { scores?: number[]; risk_score?: number }>)[];
-    const md = res.metadata ?? {};
-    const start = md.forecast_start ? Date.parse(md.forecast_start) : floorHour(Date.now());
-    const frames = hourly ? (md.frames ?? cells[0]?.properties.scores?.length ?? 1) : 1;
-    const step = hourly ? (md.step_minutes ?? 60) : 7 * 24 * 60;
-    const n = cells.length;
-    const scores = new Float32Array(frames * n);
-    cells.forEach((c, i) => {
-      const s = c.properties.scores;
-      for (let f = 0; f < frames; f++) scores[f * n + i] = Math.min(1, Math.max(0, s?.[f] ?? c.properties.risk_score ?? 0));
+  /** One-hour wind/weather snapshot from GET /wind?bbox&hour (GeoJSON points). */
+  async getWeather(validAtMs = Date.now()): Promise<WeatherGrid> {
+    const hour = floorHour(validAtMs);
+    const res = await fetchJson<FeatureCollection<Point> & { metadata?: Props }>(this.url('/wind', { bbox: CA_BBOX, hour: toIso(hour), density: 'medium' }), {
+      timeoutMs: 20_000,
     });
-    const normalized: CellFeature[] = cells.map((c) => {
-      const { scores: _s, ...props } = c.properties;
-      void _s;
-      const cell_id = String(props.cell_id ?? c.id);
-      const center = props.lon != null && props.lat != null ? [props.lon, props.lat] : centroidOfGeometry(c.geometry);
-      return { type: 'Feature', id: cell_id, geometry: c.geometry, properties: { ...props, cell_id, lon: center[0], lat: center[1], bbox: bboxOfGeometry(c.geometry) } };
-    });
+    const feats = (res.features ?? []).filter((f) => f.geometry?.type === 'Point');
+    const n = feats.length;
+    const col = (...keys: string[]) => Float32Array.from(feats, (f) => num(pick((f.properties ?? {}) as Props, ...keys)) ?? NaN);
+    const speedMs = col('wind_speed_ms', 'speed_ms');
+    const speedKmh = col('wind_speed_kmh', 'speed_kmh', 'wind_speed', 'speed');
+    for (let i = 0; i < n; i++) if (!Number.isFinite(speedKmh[i]) && Number.isFinite(speedMs[i])) speedKmh[i] = speedMs[i] * 3.6;
     return {
       metadata: {
-        generated_at: md.generated_at ?? toIso(Date.now()),
-        model_version: md.model_version ?? 'unknown',
-        target: md.target ?? 'Wildfire hotspot-occurrence risk',
-        score_type: md.score_type ?? 'uncalibrated_model_score',
-        calibrated: md.calibrated ?? false,
-        not_fire_spread_prediction: true,
-        forecast_start: toIso(start),
-        step_minutes: step,
-        frames,
-        source: md.source ?? (hourly ? 'FireWatch model (hourly)' : 'FireWatch model (7-day)'),
+        generated_at: str(pick(res.metadata ?? {}, 'issued_at', 'generated_at')) ?? toIso(Date.now()),
+        source: str(res.metadata?.source) ?? 'FireWatch API (weather provider)',
+        forecast_start: toIso(hour),
+        step_minutes: 60,
+        frames: 1,
       },
-      cells: normalized,
-      scores,
-    };
-  }
-
-  async getWeather(): Promise<WeatherGrid> {
-    const res = await fetchJson<WeatherResponse>(this.url('/weather/hourly', { horizon_hours: 168 }), { timeoutMs: 45_000 });
-    const n = res.points.length;
-    const frames = res.metadata.frames ?? res.variables.temperature_c?.length ?? 0;
-    return {
-      metadata: res.metadata,
-      points: res.points,
-      temperature_c: flat(res.variables.temperature_c, n, frames),
-      relative_humidity_pct: flat(res.variables.relative_humidity_pct, n, frames),
-      wind_speed_kmh: flat(res.variables.wind_speed_kmh, n, frames),
-      wind_direction_deg: flat(res.variables.wind_direction_deg, n, frames),
-      wind_gust_kmh: flat(res.variables.wind_gust_kmh, n, frames),
-      precipitation_mm: flat(res.variables.precipitation_mm, n, frames),
+      points: feats.map((f) => f.geometry.coordinates as [number, number]),
+      temperature_c: col('temperature_c', 'temperature_2m', 'temperature'),
+      relative_humidity_pct: col('relative_humidity_pct', 'relative_humidity_2m', 'humidity'),
+      wind_speed_kmh: speedKmh,
+      wind_direction_deg: col('wind_direction_deg', 'direction_deg', 'wind_direction', 'direction'),
+      wind_gust_kmh: col('wind_gust_kmh', 'gust_kmh', 'wind_gusts'),
+      precipitation_mm: col('precipitation_mm', 'precipitation'),
     };
   }
 
   async explain(cellId: string, validAtMs: number): Promise<Explanation> {
-    const ex = await fetchJson<Explanation>(this.url(`/explain/${encodeURIComponent(cellId)}`, { valid_at: toIso(validAtMs) }));
-    return { ...ex, risk_level: ex.risk_level ?? riskLevelKey(ex.risk_score), drivers: ex.drivers ?? [], conditions: ex.conditions ?? {} };
+    const raw = await fetchJson<Props>(this.url(`/explain/${encodeURIComponent(cellId)}`, { hour: toIso(floorHour(validAtMs)) }));
+    const list = (pick(raw, 'drivers', 'contributions', 'features', 'shap') as Props[] | undefined) ?? [];
+    const drivers: Driver[] = list.map((d) => {
+      const c = num(pick(d, 'contribution_raw', 'contribution', 'shap_value', 'value_contribution')) ?? 0;
+      const v = pick(d, 'value', 'feature_value', 'input_value');
+      return {
+        feature: String(pick(d, 'feature', 'name') ?? 'feature'),
+        label: String(pick(d, 'label', 'display_name', 'name', 'feature') ?? 'Feature'),
+        value: typeof v === 'number' || typeof v === 'string' ? v : null,
+        unit: str(d.unit) ?? undefined,
+        contribution_raw: c,
+        direction: c >= 0 ? 'increase' : 'decrease',
+      };
+    });
+    const base = num(pick(raw, 'base_value', 'expected_value')) ?? 0;
+    const rawScore = num(pick(raw, 'raw_score', 'margin')) ?? base + drivers.reduce((s, d) => s + d.contribution_raw, 0);
+    const score = num(raw.risk_score) ?? 1 / (1 + Math.exp(-rawScore));
+    return {
+      cell_id: cellId,
+      valid_at: str(pick(raw, 'forecast_hour', 'valid_at')) ?? toIso(validAtMs),
+      model_version: str(raw.model_version) ?? 'unknown',
+      risk_score: score,
+      risk_level: riskLevelKey(score),
+      score_type: str(raw.score_type) ?? 'relative_risk',
+      base_value: base,
+      raw_score: rawScore,
+      output_scale: str(raw.output_scale) ?? 'log_odds',
+      drivers,
+      conditions: ((pick(raw, 'conditions', 'inputs') as Explanation['conditions']) ?? {}) as Explanation['conditions'],
+    };
   }
 
-  chat(req: ChatRequest): Promise<ChatResponse> {
-    return fetchJson<ChatResponse>(this.url('/chat'), { method: 'POST', body: req, timeoutMs: 30_000 });
+  async chat(req: ChatRequest): Promise<ChatResponse> {
+    // Architecture §7: {message, context?: {cell_id, place_id, hour, incident_id}}
+    const context = Object.fromEntries(
+      Object.entries({ cell_id: req.cell_id, place_id: req.location_id, hour: req.valid_at, incident_id: req.incident_id }).filter(([, v]) => v),
+    );
+    const res = await fetchJson<Props>(this.url('/chat'), {
+      method: 'POST',
+      body: { message: req.message, ...(Object.keys(context).length ? { context } : {}) },
+      timeoutMs: 30_000,
+    });
+    const cites = (pick(res, 'grounding', 'citations', 'sources') as Props[] | undefined) ?? [];
+    return {
+      answer: String(pick(res, 'answer', 'message', 'text') ?? ''),
+      grounding: cites.map((c) => ({ dataset: String(pick(c, 'dataset', 'source', 'name', 'tool') ?? 'source'), as_of: str(pick(c, 'as_of', 'timestamp', 'observed_at', 'valid_at')) })),
+      disclaimer: str(res.disclaimer) ?? undefined,
+    };
+  }
+
+  // ---- on-demand risk -------------------------------------------------------------------------
+  requestView(bbox: [number, number, number, number], t: number, maxTiles?: number) {
+    return this.tiles?.ensureView(bbox, t, maxTiles) ?? 'ok';
+  }
+  requestHistory(cellId: string) {
+    void this.tiles?.ensureHistory(cellId);
   }
 }
+

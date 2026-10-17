@@ -1,7 +1,8 @@
 /** Fast spatial/temporal lookups over the loaded grids (indexes are built once per dataset). */
 import type { Feature, MultiPolygon, Polygon } from 'geojson';
 import { bboxContains, bboxOfGeometry, distanceKm, pointInGeometry, type BBox, type LngLat } from '../lib/geo';
-import type { Detection, FireGroup, PlaceResult, PointWeather, RiskGrid, WeatherGrid } from '../types';
+import type { AreaCollection } from '../api/static';
+import type { CellProps, Detection, FireGroup, PlaceResult, PointWeather, RiskGrid, WeatherGrid } from '../types';
 import { frameAt } from './store';
 
 const BUCKET = 0.25;
@@ -59,12 +60,15 @@ export function seriesForCells(grid: RiskGrid, cells: number[], hours: number[],
   const n = grid.cells.length;
   return hours.map((t) => {
     const f = riskFrame(grid, t);
-    let acc = 0;
+    let acc = 0, count = 0;
     for (const c of cells) {
       const v = grid.scores[f * n + c];
+      if (!Number.isFinite(v)) continue; // not loaded / missing in the artifact
       acc = reduce === 'max' ? Math.max(acc, v) : acc + v;
+      count++;
     }
-    return reduce === 'max' ? acc : acc / Math.max(1, cells.length);
+    if (!count) return NaN;
+    return reduce === 'max' ? acc : acc / count;
   });
 }
 
@@ -82,6 +86,35 @@ export function statewideShare(grid: RiskGrid, threshold = 0.4): Float32Array {
   }
   statewide.set(grid, out);
   return out;
+}
+
+// ---- naming ------------------------------------------------------------------------
+let countyShapes: AreaCollection | null = null;
+export const setCountyShapes = (fc: AreaCollection) => (countyShapes = fc);
+
+/** Nearest named community (prefers incorporated and larger places) within `maxKm`. */
+export function nearestPlaceName(index: PlaceResult[] | null, p: LngLat, maxKm = 30): string | null {
+  if (!index) return null;
+  let best: string | null = null, bd = Infinity;
+  for (const pl of index) {
+    if (pl.type === 'zip' || pl.type === 'county') continue;
+    if (Math.abs(pl.center[1] - p[1]) > 0.35 || Math.abs(pl.center[0] - p[0]) > 0.45) continue;
+    const d = distanceKm(p, pl.center);
+    const score = d - (pl.type === 'cdp' ? 0 : 2) - Math.log10((pl.population ?? 0) + 1);
+    if (d <= maxKm && score < bd) [bd, best] = [score, pl.name];
+  }
+  return best;
+}
+export function countyAt(p: LngLat): string | null {
+  const hit = countyShapes?.features.find((f) => pointInGeometry(p, f.geometry));
+  return hit?.properties.county ?? null;
+}
+/** County and nearby community for a point; uses the cell's own properties when the grid has them. */
+export function describePoint(index: PlaceResult[] | null, p: LngLat, props?: CellProps | null) {
+  return {
+    near: (props?.near as string | null | undefined) ?? nearestPlaceName(index, p),
+    county: (props?.county as string | null | undefined) ?? countyAt(p),
+  };
 }
 
 // ---- places ------------------------------------------------------------------------
@@ -116,14 +149,16 @@ export function cellsForPlace(grid: RiskGrid, place: PlaceResult, boundary: Feat
 export function summarizeCells(grid: RiskGrid, cells: number[], t: number) {
   const f = riskFrame(grid, t);
   const n = grid.cells.length;
-  let max = 0, maxCell = cells[0] ?? -1, sum = 0, shaded = 0;
+  let max = NaN, maxCell = cells[0] ?? -1, sum = 0, shaded = 0, known = 0;
   for (const c of cells) {
     const v = grid.scores[f * n + c];
+    if (!Number.isFinite(v)) continue;
+    known++;
     sum += v;
     if (v >= 0.2) shaded++;
-    if (v > max) [max, maxCell] = [v, c];
+    if (!(v <= max)) [max, maxCell] = [v, c];
   }
-  return { max, maxCell, mean: sum / Math.max(1, cells.length), shadedShare: shaded / Math.max(1, cells.length), count: cells.length };
+  return { max, maxCell, mean: known ? sum / known : NaN, shadedShare: shaded / Math.max(1, known), count: cells.length, known };
 }
 
 // ---- weather ---------------------------------------------------------------------

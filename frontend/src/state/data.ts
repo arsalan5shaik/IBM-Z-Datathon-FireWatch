@@ -7,14 +7,15 @@
 import { API_BASE, POLL_FIRES_MS, POLL_STATUS_MS } from '../config';
 import type { DataProvider } from '../api/provider';
 import { RemoteProvider } from '../api/remote';
-import { loadPlaceIndex } from '../api/static';
+import { loadCounties, loadPlaceIndex } from '../api/static';
+import { setCountyShapes } from './lookups';
 import { coverageFromGroups, groupDetections } from '../lib/fireGroups';
-import { HOUR_MS } from '../lib/time';
+import { HOUR_MS, floorHour } from '../lib/time';
 import { SampleProvider } from '../mock/sampleProvider';
-import type { Explanation } from '../types';
-import { getState, setState, toast, useStore, type AppState, type Dataset } from './store';
+import type { Explanation, WeatherGrid } from '../types';
+import { getState, setState, toast, useStore, validTimeOf, type AppState, type Dataset } from './store';
 
-export const remote: DataProvider | null = API_BASE ? new RemoteProvider(API_BASE) : null;
+export const remote: RemoteProvider | null = API_BASE ? new RemoteProvider(API_BASE) : null;
 let sampleInstance: SampleProvider | null = null;
 export const sample = (): DataProvider => (sampleInstance ??= new SampleProvider());
 
@@ -52,22 +53,64 @@ async function load<K extends Key>(key: K, fetcher: (p: DataProvider) => Promise
 
 /** Provider that served the risk grid — explanations must come from the same model. */
 export const riskProvider = (): DataProvider => (getState().risk.origin === 'api' && remote ? remote : sample());
+const apiRisk = () => !!remote && getState().risk.origin === 'api';
 
 export const loadStatus = () => load('status', (p) => p.getStatus());
 export const loadFires = () => load('fires', (p) => p.getFires(48));
-export const loadIncidents = () => load('incidents', (p) => p.getIncidents());
 export const loadCoverage = () => load('coverageApi', (p) => p.getCoverage(48));
 export const loadRisk = () => load('risk', (p) => p.getRisk());
-export const loadWeather = () => load('weather', (p) => p.getWeather());
+
+/** Sample incidents only make sense next to sample detections; live detections never get fictional names. */
+export async function loadIncidents() {
+  if (remote && getState().fires.origin !== 'api') {
+    const data = await sample().getIncidents();
+    setState({ incidents: { state: 'ready', data, origin: 'fallback', error: null, at: Date.now() } });
+    return;
+  }
+  return load('incidents', (p) => p.getIncidents());
+}
+
+// The backend serves weather one hour at a time; keep a small per-hour cache.
+const weatherCache = new Map<number, WeatherGrid>();
+export async function loadWeather(force = false) {
+  const hour = floorHour(validTimeOf(getState()));
+  if (getState().weather.origin === 'api' && !force) {
+    const cached = weatherCache.get(hour);
+    if (cached) return setState((s) => ({ weather: { ...s.weather, data: cached } }));
+  }
+  await load('weather', (p) => p.getWeather(hour));
+  const s = getState();
+  if (s.weather.origin === 'api' && s.weather.data) {
+    weatherCache.set(hour, s.weather.data);
+    if (weatherCache.size > 24) weatherCache.delete(weatherCache.keys().next().value!);
+  }
+}
 
 export async function loadPlaces() {
   setState({ places: { state: 'loading', data: null, origin: null, error: null, at: null } });
   try {
-    const data = await loadPlaceIndex();
+    const [data, counties] = await Promise.all([loadPlaceIndex(), loadCounties().catch(() => null)]);
+    if (counties) setCountyShapes(counties);
     setState({ places: { state: 'ready', data, origin: 'sample', error: null, at: Date.now() } });
   } catch (e) {
     setState({ places: { state: 'error', data: null, origin: null, error: errMsg(e), at: null } });
   }
+}
+
+// ---- backend risk: on-demand tiles ---------------------------------------------------------
+type BBoxT = [number, number, number, number];
+/** Ask for the forecast cells covering the visible map at the selected hour (backend mode). */
+export function requestRiskView(bbox: BBoxT, t: number) {
+  if (!apiRisk()) return;
+  const coverage = remote!.requestView(bbox, t);
+  if (getState().riskCoverage !== coverage) setState({ riskCoverage: coverage });
+}
+/** A searched place may extend beyond the screen; allow more tiles for it. */
+export function requestRiskArea(bbox: BBoxT, t: number) {
+  if (apiRisk()) remote!.requestView(bbox, t, 40);
+}
+export function requestCellHistory(cellId: string) {
+  if (apiRisk()) remote!.requestHistory(cellId);
 }
 
 /** Recompute lookback-filtered detections, fire groups and illustrative coverage. */
@@ -92,10 +135,34 @@ export function startData() {
     { equalityFn: (a, b) => a.every((v, i) => v === b[i]) },
   );
 
-  void Promise.all([loadStatus(), loadPlaces(), loadFires(), loadIncidents(), loadCoverage(), loadRisk(), loadWeather()]).then(() => {
+  if (remote) {
+    // Sparse backend grid updates as tiles arrive.
+    remote.onRiskChange = (grid) => {
+      if (getState().risk.origin === 'api') setState((s) => ({ risk: { ...s.risk, data: grid, at: Date.now() } }));
+    };
+    // Backend weather is per hour: follow the timeline (debounced so playback doesn't flood the API).
+    let timer = 0;
+    useStore.subscribe(
+      (s) => floorHour(validTimeOf(s)),
+      () => {
+        if (getState().weather.origin !== 'api') return;
+        clearTimeout(timer);
+        timer = window.setTimeout(() => void loadWeather(), getState().playing ? 600 : 150);
+      },
+    );
+  }
+
+  void Promise.all([
+    loadStatus(),
+    loadPlaces(),
+    loadFires().then(loadIncidents),
+    loadCoverage(),
+    loadRisk(),
+    loadWeather(),
+  ]).then(() => {
     const s = getState();
     const fellBack = (['fires', 'risk', 'weather'] as const).filter((k) => s[k].origin === 'fallback');
-    if (fellBack.length) toast(`FireWatch API unavailable for ${fellBack.join(', ')} — showing sample data.`, 'error', 8000);
+    if (fellBack.length) toast(`FireWatch API data unavailable for ${fellBack.join(', ')} — showing sample data for those.`, 'error', 8000);
   });
 
   // Clock: drives the live hour, relative times and lookback filtering.
@@ -127,16 +194,21 @@ async function checkStatus() {
   const after = getState().status.data?.snapshots;
   if (!after) return;
   if (after.fires_at !== before?.fires_at) void loadFires();
-  if (after.risk_at !== before?.risk_at) {
+  if (after.risk_at !== before?.risk_at && after.risk_at) {
     explainCache.clear();
     void loadRisk();
   }
-  if (after.weather_at !== before?.weather_at) void loadWeather();
+  if (after.weather_at !== before?.weather_at && after.weather_at) {
+    weatherCache.clear();
+    void loadWeather(true);
+  }
 }
 
 export async function refreshAll() {
   explainCache.clear();
-  await Promise.all([loadStatus(), loadFires(), loadIncidents(), loadCoverage(), loadRisk(), loadWeather()]);
+  weatherCache.clear();
+  remote?.tiles?.reset(Date.parse(getState().risk.data?.metadata.forecast_start ?? '') || Math.ceil(Date.now() / HOUR_MS) * HOUR_MS);
+  await Promise.all([loadStatus(), loadFires().then(loadIncidents), loadCoverage(), loadRisk(), loadWeather(true)]);
 }
 
 // ---- explanations ----------------------------------------------------------------

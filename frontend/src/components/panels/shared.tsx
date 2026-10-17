@@ -71,7 +71,10 @@ export function useExplanation(cellId: string | null, t: number) {
       () => {
         getExplanation(cellId, t)
           .then((data) => !cancelled && setLocal({ key, data, error: null }))
-          .catch((e: Error) => !cancelled && setLocal({ key, data: null, error: e.message || 'Explanation unavailable' }));
+          .catch((e: Error & { status?: number }) =>
+            !cancelled &&
+            setLocal({ key, data: null, error: e.status === 404 ? 'the API doesn’t provide factors for this cell and hour yet' : e.message || 'unavailable' }),
+          );
       },
       playing ? 500 : 0,
     );

@@ -70,6 +70,13 @@ function StatusPill() {
         <Loader2 size={14} className="spin" /> Loading
       </>
     );
+  } else if (origins.includes('fallback') && origins.includes('api')) {
+    cls += ' is-stale';
+    content = (
+      <>
+        <span className="live-dot" /> Live + sample layers
+      </>
+    );
   } else if (origins.includes('fallback')) {
     cls += ' is-error';
     content = <>API offline · Sample</>;

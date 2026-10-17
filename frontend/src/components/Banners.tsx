@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { AlertTriangle, Mountain, RefreshCw, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, Clock, Mountain, RefreshCw, WifiOff, X, ZoomIn } from 'lucide-react';
 import { refreshAll } from '../state/data';
 import { useStore } from '../state/store';
 
@@ -12,6 +12,7 @@ export function Banners() {
   const frozen = useStore((s) => (s.risk.data?.metadata.frames ?? 2) === 1);
   const terrain = useStore((s) => s.map.terrainError && (s.view === '3d' || s.basemap === 'terrain'));
   const styleFallback = useStore((s) => s.map.styleFallback);
+  const coverage = useStore((s) => (s.risk.origin === 'api' && s.layers.risk ? s.riskCoverage : null));
   const [hidden, setHidden] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
 
@@ -27,7 +28,7 @@ export function Banners() {
     items.push({
       id: 'fallback',
       icon: <AlertTriangle size={15} />,
-      text: 'Can’t reach the FireWatch API — showing sample data instead.',
+      text: 'Some FireWatch API data isn’t available yet — those layers show sample data.',
       action: (
         <button type="button" onClick={retry} disabled={busy}>
           <RefreshCw size={13} className={busy ? 'spin' : ''} /> Retry
@@ -45,6 +46,9 @@ export function Banners() {
         </button>
       ),
     });
+  if (coverage === 'zoom-in') items.push({ id: 'zoom', icon: <ZoomIn size={15} />, text: 'Zoom in to load the 3 km hourly forecast for this area.' });
+  if (coverage === 'missing-hour') items.push({ id: 'missing-hour', icon: <Clock size={15} />, text: 'No published forecast for this hour in view.' });
+  if (coverage === 'error') items.push({ id: 'tiles', icon: <AlertTriangle size={15} />, text: 'Some forecast tiles failed to load — retrying shortly.' });
   if (frozen) items.push({ id: 'frozen', icon: <AlertTriangle size={15} />, text: 'Hourly risk isn’t available from the API — every hour shows the 7-day score.' });
   if (terrain) items.push({ id: 'terrain', icon: <Mountain size={15} />, text: 'Terrain elevation tiles are unavailable — 3D shows a tilted flat map.' });
   if (styleFallback) items.push({ id: 'style', icon: <AlertTriangle size={15} />, text: 'Using a simplified basemap (the vector map service is unreachable).' });
