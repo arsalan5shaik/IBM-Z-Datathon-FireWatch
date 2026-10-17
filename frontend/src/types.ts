@@ -131,7 +131,7 @@ export interface RiskGrid {
 
 // ---- /weather (hourly gridded) -------------------------------------------------
 export interface WeatherGrid {
-  metadata: { generated_at: string; source: string; forecast_start: string; step_minutes: number; frames: number; sample?: boolean };
+  metadata: { generated_at: string; source: string; forecast_start: string; step_minutes: number; frames: number; sample?: boolean; fetched_at?: string; cache_status?: 'fresh' | 'stale'; complete?: boolean; data_kind?: 'forecast' };
   points: [number, number][];
   temperature_c: Float32Array;
   relative_humidity_pct: Float32Array;
@@ -141,6 +141,10 @@ export interface WeatherGrid {
   precipitation_mm: Float32Array;
 }
 export interface PointWeather {
+  complete?: boolean;
+  fetched_at?: string;
+  cache_status?: 'fresh' | 'stale';
+  source?: string;
   temperature_c: number;
   relative_humidity_pct: number;
   wind_speed_kmh: number;

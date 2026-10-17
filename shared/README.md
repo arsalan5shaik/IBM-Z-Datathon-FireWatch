@@ -77,3 +77,20 @@ hours. Any changed input/model/feature/grid/score/target revision invalidates th
 entire affected window because ML has not supplied a finer dependency map.
 The PR carrying this change is the ML/frontend integration notice; actual live
 handoff agreement remains required before connecting real artifacts.
+
+## Proposed future forecast weather (weather-inference feature)
+
+`weather-sampling.proposed` maps explicit ML-provided anchors to every grid cell;
+`weather-inputs.proposed` transports 168 complete hourly normalized partitions.
+Both use schema_version=proposed-weather-1, and the input packet explicitly says
+model_contract_status=unconfirmed. These are separate from prediction contracts.
+They do not assert the trained model expects these fields, daily aggregation,
+lag transformations or wind units. The existing ML branch documents historical
+daily aggregates in m/s; this transport uses hourly km/h with explicit names.
+
+Weather source/fetch time, grid mode/version, mapping, and partition revisions are
+preserved. Hashes exclude fetch time and retain stable overlapping-hour revisions.
+Backend does not overwrite prediction input_revision or manifests on weather fetch.
+Missing coverage, stale forecasts or mapping mismatches prevent packet generation.
+See backend/WEATHER_INTEGRATION.md and backend/README.md for ownership and blockers.
+The feature PR is the cross-team proposal notice; real ML integration needs agreement.

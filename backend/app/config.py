@@ -24,6 +24,17 @@ class Settings(BaseSettings):
     sqlite_path: Path = Path("shared/data/firewatch.sqlite3")
     cors_origins: list[str] = Field(default_factory=list)
     firms_map_key: SecretStr | None = Field(default=None, repr=False)
+    nasa_firms_map_key: SecretStr | None = Field(default=None, repr=False)
+    firms_base_url: str = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
+    firms_sources: list[Literal["VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT"]] = Field(
+        default_factory=lambda: ["VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT"]
+    )
+    firms_max_hours: int = Field(default=72, ge=24, le=72)
+    firms_default_limit: int = Field(default=500, ge=1, le=5000)
+    firms_max_limit: int = Field(default=2000, ge=1, le=5000)
+    firms_max_response_bytes: int = Field(default=4_000_000, ge=1024, le=16_000_000)
+    firms_max_rows: int = Field(default=50000, ge=1, le=100000)
+    firms_boundary_path: Path = Path("frontend/public/data/ca-boundary.geojson")
     llm_api_key: SecretStr | None = Field(default=None, repr=False)
     weather_provider: Literal["open-meteo"] = "open-meteo"
     forecast_hours: Literal[168] = 168
@@ -45,6 +56,52 @@ class Settings(BaseSettings):
     provider_max_retries: int = Field(default=2, ge=0, le=5)
     firms_refresh_minutes: int = Field(default=15, ge=10, le=1440)
     weather_refresh_minutes: int = Field(default=60, ge=15, le=1440)
+    weather_batch_size: int = Field(default=50, ge=1, le=100)
+    weather_max_anchors: int = Field(default=512, ge=1, le=2000)
+    weather_stale_hours: int = Field(default=3, ge=1, le=24)
+    weather_refresh_timeout_seconds: float = Field(default=25, ge=1, le=60)
+
+    @field_validator("forecast_hours", "grid_resolution_m", mode="before")
+    @classmethod
+    def integer_literal_from_environment(cls, value):
+        # Environment/dotenv values are strings; retain Literal validation after conversion.
+        if isinstance(value, str):
+            try:
+                return int(value)
+            except ValueError:
+                pass
+        return value
+
+    @field_validator("firms_sources")
+    @classmethod
+    def unique_sources(cls, values):
+        if not values or len(values) != len(set(values)):
+            raise ValueError("FIRMS sources must be nonempty and unique")
+        return values
+
+    @field_validator("firms_base_url")
+    @classmethod
+    def safe_firms_url(cls, value):
+        parsed = urlsplit(value)
+        try:
+            _ = parsed.port
+        except ValueError:
+            raise ValueError("Invalid FIRMS endpoint port") from None
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+            or not parsed.path.endswith("/api/area/csv")
+            or value != f"https://{parsed.netloc}{parsed.path}"
+            or any(char.isspace() for char in value)
+        ):
+            raise ValueError(
+                "FIRMS base URL must be an HTTPS Area API endpoint without credentials"
+            )
+        return value
 
     @field_validator("repo_root")
     @classmethod
@@ -82,7 +139,9 @@ class Settings(BaseSettings):
     def resolve_paths(self) -> "Settings":
         if self.job_enabled and self.scheduler_owner != "backend":
             raise ValueError("Backend jobs require explicit scheduler_owner=backend")
-        for name in ("shared_data_dir", "sqlite_path"):
+        if self.firms_default_limit > self.firms_max_limit:
+            raise ValueError("FIRMS default limit exceeds maximum")
+        for name in ("shared_data_dir", "sqlite_path", "firms_boundary_path"):
             value = getattr(self, name)
             if not value.is_absolute():
                 value = self.repo_root / value

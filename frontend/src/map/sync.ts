@@ -12,6 +12,7 @@ import { getState, setState, useStore, validTimeOf, type AppState } from '../sta
 import type { LayerKey, WeatherGrid } from '../types';
 import { LAYER_GROUPS, SRC, riskFillOpacity, riskGlowOpacity, setVisible } from './layers';
 import { FireMarkers } from './markers';
+import { windFeatures } from './weatherFeatures';
 import { TERRAIN_PAINT } from './style';
 
 const reduceMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
@@ -180,7 +181,12 @@ export function startSync(map: MapLibreMap, markers: FireMarkers): () => void {
   function applyWeather(force = false) {
     const s = getState();
     const g = s.weather.data;
-    if (!g) return;
+    if (!g || weatherFrame(g, validTimeOf(s)) < 0) {
+      for (const source of [SRC.wind, SRC.windLocal, SRC.weather]) src(source)?.setData({ type: 'FeatureCollection', features: [] });
+      dirty.wind = dirty.weather = true;
+      lastW = { g: null, f: -1, units: '' };
+      return;
+    }
     const t = validTimeOf(s);
     const f = weatherFrame(g, t);
     const changed = g !== lastW.g || f !== lastW.f || s.units !== lastW.units;
@@ -189,16 +195,11 @@ export function startSync(map: MapLibreMap, markers: FireMarkers): () => void {
       dirty.wind = dirty.weather = true;
       lastW = { g, f, units: s.units };
     }
-    const m = g.points.length;
     if (s.layers.wind && dirty.wind) {
       const lv = levelsOf(g);
       src(SRC.wind)?.setData({
         type: 'FeatureCollection',
-        features: g.points.map((p, i) => ({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: p },
-          properties: { s: g.wind_speed_kmh[f * m + i], d: (g.wind_direction_deg[f * m + i] + 180) % 360, lvl: lv[i], i },
-        })),
+        features: windFeatures(g, t, lv),
       });
       dirty.wind = false;
     }

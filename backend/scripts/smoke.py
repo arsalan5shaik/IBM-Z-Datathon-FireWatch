@@ -51,6 +51,7 @@ def smoke(fixtures=False) -> None:
     env["CORS_ORIGINS"] = '["http://localhost:5173"]'
     script = Path(__file__).resolve()
     with tempfile.TemporaryDirectory(prefix="firewatch-smoke-") as directory:
+        env["SHARED_DATA_DIR"] = str(Path(directory) / "data")
         if fixtures:
             source = script.parents[2] / "shared/examples"
             data = Path(directory) / "data"
@@ -91,6 +92,9 @@ def smoke(fixtures=False) -> None:
                             raise RuntimeError("Smoke server startup timed out")
                         time.sleep(0.1)
                     assert client.get("/health/live").json() == {"status": "alive"}
+                    fires = client.get("/api/v1/fires/live")
+                    assert fires.status_code == 503
+                    assert fires.json()["error"]["code"] == "firms_unavailable"
                     status = client.get("/api/v1/status")
                     assert status.status_code == 200
                     data = status.json()
@@ -142,6 +146,7 @@ def smoke(fixtures=False) -> None:
                     "live",
                     "ready",
                     "unavailable-data",
+                    "firms-cache-only-unavailable",
                     "structured-errors",
                     "cors",
                     "openapi",
