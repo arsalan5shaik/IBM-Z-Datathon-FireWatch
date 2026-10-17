@@ -60,7 +60,7 @@ def risk(
     generated = []
     score_type = target_type = None
     for timestamp in selected:
-        artifact, values = store.hour(manifest, grid, timestamp)
+        artifact, values = store.hour(manifest, grid, timestamp, cells)
         if score_type and (
             score_type != artifact.score_type or target_type != artifact.target_type
         ):
@@ -125,7 +125,7 @@ def history(request: Request, cell_id: str, start: str | None = None, end: str |
     while first < stop:
         record = {"forecast_hour": iso(first), "risk_score": None, "missing": True}
         if first in manifest.hours:
-            artifact, scores = store.hour(manifest, grid, first)
+            artifact, scores = store.hour(manifest, grid, first, [cell_id])
             record |= {
                 "risk_score": scores.get(cell_id),
                 "missing": cell_id not in scores,

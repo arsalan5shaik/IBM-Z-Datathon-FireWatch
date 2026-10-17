@@ -5,6 +5,16 @@ from contextlib import contextmanager
 from pathlib import Path
 
 
+def durable_replace(source, target):
+    os.replace(source, target)
+    if os.name != "nt":
+        directory_fd = os.open(Path(target).parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+
+
 def atomic_json(path: Path, document):
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = json.dumps(document, allow_nan=False, sort_keys=True, separators=(",", ":")).encode()
@@ -15,13 +25,7 @@ def atomic_json(path: Path, document):
             stream.write(payload)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
-        if os.name != "nt":
-            directory_fd = os.open(path.parent, os.O_RDONLY)
-            try:
-                os.fsync(directory_fd)
-            finally:
-                os.close(directory_fd)
+        durable_replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -42,9 +46,11 @@ def single_owner(path: Path):
         try:
             if os.name == "nt":
                 import msvcrt
+
                 msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
             else:
                 import fcntl
+
                 fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
             raise JobLocked("Another scheduler owns publication") from None
@@ -54,7 +60,9 @@ def single_owner(path: Path):
             stream.seek(0)
             if os.name == "nt":
                 import msvcrt
+
                 msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
             else:
                 import fcntl
+
                 fcntl.flock(stream.fileno(), fcntl.LOCK_UN)

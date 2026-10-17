@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     job_enabled: bool = False
     scheduler_owner: Literal["unassigned", "backend", "ml"] = "unassigned"
     generator_timeout_seconds: int = Field(default=300, ge=1, le=3600)
+    generator_max_retries: int = Field(default=2, ge=0, le=5)
+    generator_retry_seconds: float = Field(default=1, ge=0, le=30)
     forecast_retention_hours: int = Field(default=24, ge=1, le=168)
     min_free_disk_mb: int = Field(default=512, ge=1, le=100000)
     forecast_generator_cmd: SecretStr | None = Field(default=None, repr=False)
