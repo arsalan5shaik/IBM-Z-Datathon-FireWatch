@@ -1,0 +1,99 @@
+# FireWatch — frontend
+
+Map-first California wildfire intelligence UI: live NASA satellite hotspots, an **hourly** 7-day
+experimental risk forecast, wind and weather, place search, SHAP-style explanations and a grounded
+AI assistant. Vite + React + TypeScript + MapLibre GL JS (one map instance for 2D/3D and Default/Terrain).
+
+**Live demo (sample data):** https://arsalan5shaik.github.io/IBM-Z-Datathon-FireWatch/
+
+## Quick start
+
+```bash
+cd frontend
+npm ci
+npm run dev            # http://localhost:5173 — runs on built-in SAMPLE data
+npm test               # unit tests (vitest)
+npm run build          # type-check + production build → dist/
+```
+
+Node 20+ (CI uses 24). No API keys are needed: the basemap (OpenFreeMap), terrain (AWS Terrain Tiles)
+and boundaries (US Census, bundled) are all keyless.
+
+## Data modes
+
+| Mode | How | What you see |
+|---|---|---|
+| **Sample** (default) | no configuration, or `?demo=1` | Everything generated in the browser relative to the current hour; badge **SAMPLE DATA** |
+| **Backend** | build with `VITE_API_BASE_URL=/api/v1`, or open `?api=https://host/api/v1` | Data from the FireWatch API; badge **Live** |
+| **Fallback** | backend configured but a request fails | That dataset switches to sample data; badge **API offline · Sample** + retry banner |
+
+Endpoints, shapes and what is required vs optional are in **[API_INTEGRATION.md](API_INTEGRATION.md)**.
+
+Mock backend for development (serves the API contract from the sample generator):
+
+```bash
+FIREWATCH_MOCK_API=1 npm run dev     # then open http://localhost:5173/?api=/api/v1
+FIREWATCH_MOCK_CHAT=503 ...           # make /chat fail to exercise the offline-assistant fallback
+```
+
+Proxy a real backend during development: `FIREWATCH_API_PROXY=http://localhost:8000 npm run dev` and open `?api=/api/v1`.
+
+## What's in the UI
+
+- **Top bar** — logo (California overview), search (city / town / CDP / county / ZIP, typo tolerant, coordinates,
+  out-of-state and street-address handling), map-centre weather, data-status pill (opens data sources & timestamps).
+- **Left controls** — 2D / subtle 3D (25° pitch, 1× terrain), Layers popover (Default/Terrain, Live fires,
+  7-day risk, perimeters, wind, weather, vegetation, hotspot lookback, risk opacity, units), wind quick toggle,
+  locate me (California only), zoom, compass when rotated. Default/Terrain is also top-right.
+- **Hourly timeline** — Live + 168 forecast hours, day labels in California time, play/pause (1×/2×/4×),
+  ±1 h / ±1 day, calendar jump (incl. statewide peak), risk-trend sparkline (statewide or selected area),
+  valid-time vs model-run vs data-update times.
+- **Map** — orange → red → purple risk cells (purple highest) with glow, flame markers for hotspot clusters,
+  FRP-sized / age-coloured detections, official perimeters (solid) vs illustrative hotspot influence
+  (dashed), wind arrows (denser when zoomed in), weather labels, fuel types, California mask, search outline.
+- **Details panel** (on click only; bottom sheet on phones) — forecast cell, place, hotspot, incident or
+  hotspot cluster: risk score/category, hourly 7-day chart (click to jump), conditions, *Why this risk?*
+  SHAP bars, nearby fire activity, Ask AI.
+- **FireWatch AI** — contextual chat (selected place/cell/hour), backend LLM when available, otherwise an
+  offline assistant that answers only from loaded data and never gives evacuation advice.
+- Shareable URL (camera, style, 2D/3D, layers, hour, selection), keyboard shortcuts (`?`), offline/stale/error
+  states, reduced-motion support.
+
+## Project layout
+
+```
+src/
+  api/        provider interface, backend client (remote.ts), static geography loaders, fetch helper
+  mock/       SAMPLE generator: scenario weather, additive log-odds model (exact SHAP), fires, perimeters
+  state/      zustand store, data loading/polling/fallback, lookups, URL state, chat, keyboard
+  map/        MapLibre setup, style patching (terrain/hillshade), layers, store→map sync, interactions, markers
+  components/ top bar, search, controls, legend, timeline, panels, charts, chat, dialogs
+  lib/        time (California), geo, search ranking, risk scale, formatting, contours, offline assistant
+public/data/  Census boundaries + search index, sample forecast grid (generated, see below)
+mock-api/     dev-only Vite middleware that speaks the backend contract
+scripts/      data builders
+```
+
+Risk thresholds/colours: `src/config.ts` (`RISK_LEVELS`, `RISK_RAMP`) — keep in sync with the ML metrics.
+
+## Regenerating static data
+
+```bash
+npm run data:geo    # Census state/county/place/ZCTA boundaries + search index → public/data/
+npm run data:grid   # SAMPLE hex grid with DEM terrain, historical FIRMS counts (repo CSVs), heuristic fuels
+```
+
+Both cache downloads in `scripts/.cache/` (or `CENSUS_DIR` / `DEM_DIR`). The sample grid is demo
+scaffolding only — production geometry comes from the ML grid via the API.
+
+## Deploying
+
+- **GitHub Pages:** `.github/workflows/frontend-pages.yml` builds, tests and deploys on pushes to `AS_feat`/`main`.
+- **With the Python backend:** `npm run build` and serve `frontend/dist/` as static files on the same origin as
+  `/api/v1` (the build uses relative asset paths). Build with `VITE_API_BASE_URL=/api/v1` to make it the default.
+
+## Honesty rules the UI enforces
+
+Hotspots ≠ perimeters; FRP ≠ fire size or risk; risk is an experimental relative score unless the API says
+`calibrated_probability`; illustrative influence shapes are never reported as burned area; missing values show
+“Unavailable”; sample data is always labelled; no evacuation advice — links to official sources instead.
