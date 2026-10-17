@@ -6,6 +6,7 @@ import pytest
 from app.config import Settings
 from app.errors import APIError
 from app.persistence.atomic import single_owner
+from app.services.time import next_hour
 from app.services.weather_cache import WeatherCache, display_points, hour_revision, sample_point
 from app.services.weather_provider import normalize
 from tests.unit.test_weather_provider import NOW, response
@@ -125,5 +126,29 @@ def test_cache_bounds_and_failed_batch_is_not_published(tmp_path):
         with pytest.raises(APIError):
             await empty.get(points[:2])
         assert not empty.entries and not empty.path.exists()
+
+    asyncio.run(run())
+
+
+def test_refresh_on_utc_rollover_preserves_full_future_horizon(tmp_path):
+    settings = Settings(_env_file=None, repo_root=tmp_path)
+    provider = MockProvider()
+    clock = [NOW + timedelta(minutes=30)]
+    cache = WeatherCache(provider, settings, lambda: clock[0])
+    point = sample_point(37.9577, -121.2908)
+
+    async def run():
+        old = (await cache.get([point]))[0][0]
+        overlap = hour_revision(point, old.forecast.hours[2])
+        clock[0] = NOW + timedelta(hours=1, minutes=1)
+        assert cache.state(old) == "stale"  # Only 31 minutes old, but the tail hour expired.
+        provider.data["hourly"]["time"] = [
+            value + 3600 for value in provider.data["hourly"]["time"]
+        ]
+        refreshed, state = (await cache.get([point]))[0]
+        assert provider.calls == 2 and state == "fresh"
+        wanted = {next_hour(clock[0]) + timedelta(hours=i) for i in range(168)}
+        assert wanted <= {hour.forecast_hour for hour in refreshed.forecast.hours if hour.complete}
+        assert hour_revision(point, refreshed.forecast.hours[1]) == overlap
 
     asyncio.run(run())
