@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
 from app.services.time import utc_hour
 
@@ -59,6 +59,7 @@ class HourArtifact(Contract):
 
 
 class Manifest(Contract):
+    _recovered: bool = PrivateAttr(default=False)
     schema_version: Literal["1.0"]
     data_mode: Literal["fixture", "live"]
     active_window_start: datetime
@@ -71,6 +72,10 @@ class Manifest(Contract):
     published_at: datetime
     # Optional immutable artifact references are introduced for safe revision publication.
     artifacts: dict[str, str] = Field(default_factory=dict)
+    grid_artifact: str = "grid.geojson"
+    validated_cell_count: int | None = Field(default=None, ge=1, le=100000)
+
+
 
     @field_validator(
         "active_window_start", "active_window_end_exclusive", "published_at", mode="before"
