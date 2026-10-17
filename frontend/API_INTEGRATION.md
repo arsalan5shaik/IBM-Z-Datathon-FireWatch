@@ -1,6 +1,6 @@
 # Frontend / backend integration
 
-Verified locally on 2026-10-17 with the NASA integration checkpoint and main `1eea277` (FIRMS, weather, elevation and location-search updates).
+Verified locally on 2026-10-17 with the NASA integration checkpoint and main `b901d05` (FIRMS, weather, elevation and location-search updates).
 The authoritative route contract is `FireWatch_Backend_Architecture.md`; adapters live in `src/api/`.
 This feature adds no React app, map instance, dependency or backend source edit; upstream backend changes are preserved.
 
@@ -127,5 +127,9 @@ npm.cmd run build
 The synchronized frontend has no lint script. During local verification, the already installed Oxlint executable
 from the preserved older frontend was used read-only; no lint dependency was added. It reported two
 pre-existing warnings (empty spread fallbacks in store.ts and panels/shared.tsx).
-The merged backend passed 249 tests, Ruff lint/format, both smoke modes and Linux/Windows CI.
+Before synchronization, the merged FIRMS/weather backend passed 249 tests, Ruff lint/format, both smoke modes and Linux/Windows CI.
+After synchronization, the frontend passed 50 tests, TypeScript/build and lint (the same two existing warnings).
+See the PR checks for the synchronized backend suite and smoke results.
+The optional legacy location-browser script defaults to teammate-specific ports and assumes a usable forecast-hour control.
+It is not a readiness check while validated model forecasts are unavailable; current search/weather behavior was verified directly in the running app.
 The frontend integration is isolated on CO_feat/frontend-integration for review; check its PR validation before merging.

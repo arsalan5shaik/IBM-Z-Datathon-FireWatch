@@ -96,7 +96,7 @@ scaffolding only — production geometry comes from the ML grid via the API.
 
 ## Deploying
 
-- **GitHub Pages:** `.github/workflows/frontend-pages.yml` builds, tests and deploys on pushes to `AS_feat`/`main`.
+- **GitHub Pages:** `.github/workflows/frontend-pages.yml` builds, tests and deploys on pushes to `main`; its optional `VITE_API_BASE_URL` repository variable selects a deployed backend.
 - **With the Python backend:** `npm run build` and serve `frontend/dist/` as static files on the same origin as
   `/api/v1` (the build uses relative asset paths). Build with `VITE_API_BASE_URL=/api/v1` to make it the default.
 
