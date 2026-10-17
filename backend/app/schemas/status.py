@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 Availability = Literal["healthy", "degraded", "unavailable"]
 
@@ -35,6 +35,30 @@ class SchedulerStatus(BaseModel):
 
 
 class ServiceStatus(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "status": "degraded",
+                    "checked_at": "2026-10-17T18:00:00Z",
+                    "started_at": "2026-10-17T17:59:59Z",
+                    "runtime_arch": "AMD64",
+                    "data_mode": "unavailable",
+                    "api": {"status": "healthy", "stale": False},
+                    "forecast": {
+                        "status": "unavailable",
+                        "stale": True,
+                        "valid_hour_count": 0,
+                        "missing_hour_count": 168,
+                    },
+                    "providers": {
+                        name: {"status": "unavailable", "stale": True}
+                        for name in ("firms", "weather", "incidents", "chatbot")
+                    },
+                }
+            ]
+        }
+    )
     status: Availability
     api_version: Literal["v1"] = "v1"
     service_version: Literal["0.1.0"] = "0.1.0"

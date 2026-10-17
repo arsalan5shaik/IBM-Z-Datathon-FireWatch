@@ -62,6 +62,8 @@ class Settings(BaseSettings):
                 or parsed.path
                 or parsed.query
                 or parsed.fragment
+                or value != f"{parsed.scheme}://{parsed.netloc}"
+                or parsed.netloc.endswith(":")
                 or "*" in value
                 or any(char.isspace() for char in value)
             ):

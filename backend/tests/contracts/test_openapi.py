@@ -17,3 +17,12 @@ def test_documented_routes_and_error_contract(client):
         assert responses[code]["content"]["application/json"]["schema"]["$ref"].endswith(
             "/ErrorResponse"
         )
+
+
+def test_documented_example_is_valid_and_not_a_forecast(client):
+    schema = client.get("/openapi.json").json()
+    example = schema["components"]["schemas"]["ServiceStatus"]["examples"][0]
+    model = ServiceStatus.model_validate(example)
+    assert model.data_mode == "unavailable"
+    assert model.forecast.model_version is None
+    assert model.forecast.valid_hour_count == 0

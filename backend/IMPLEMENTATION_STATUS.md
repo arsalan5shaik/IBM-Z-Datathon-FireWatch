@@ -1,6 +1,7 @@
 # Backend implementation status
 
-Updated: 2026-10-17. Planning only; no backend server has been implemented yet.
+Updated: 2026-10-17. API foundation implemented and locally verified; PR/CI/merge
+gates remain before the next feature.
 
 ## Repository inventory and prerequisites
 
@@ -8,7 +9,9 @@ Updated: 2026-10-17. Planning only; no backend server has been implemented yet.
 - `FireWatch_Frontend_Spec.md` is absent from the checkout, fetched main,
   fetched frontend branch, and locally available Git history for that path.
   Asked the requester for its location or permission to use `02_API_CONTRACT.md`
-  and `03_UI_DESIGN.md` instead. Code edits are gated on that mandatory read.
+  and `03_UI_DESIGN.md` instead. After the requester said "continue", resumed with
+  those existing documents and explicitly stated that interpretation. The missing
+  file was not fabricated; discrepancies remain documented for team alignment.
 - Read README and the four numbered handoff documents; inspected frontend
   package scripts, App, and FireMap from `origin/feature/firewatch-frontend`.
   The frontend branch currently displays a basemap without backend calls.
@@ -25,13 +28,16 @@ Updated: 2026-10-17. Planning only; no backend server has been implemented yet.
 - GitHub authentication works outside the sandbox as `Jashan-tech`, with push
   permission and without admin/maintain permission. Main reports
   `protected=false`; the applicable branch-rules endpoint returned `[]`.
-  Merge, squash, and rebase mechanisms are enabled. PR creation and actual push
-  have not yet been exercised at this planning checkpoint.
+  Merge, squash, and rebase mechanisms are enabled. Planning commit `ca25177` and
+  tested core commit `b1f137d` were pushed and verified with `git ls-remote`.
 - No existing required checks/reviews were reported by the inspected branch
   rules. This does not waive the task's green-CI and merge-authorization gates.
-- Detected local Python is 3.10.9; Python 3.11+ is required. A supported isolated
-  runtime must be provisioned before claiming local backend tests passed.
-  No LinuxONE host or s390x runtime has been supplied or verified.
+- Initially detected Python 3.10.9. Installed uv 0.13.1 in a temporary bootstrap
+  directory and managed Python 3.11.17; created ignored `backend/.venv` and a
+  committed `backend/uv.lock`. No system Python was replaced. No LinuxONE host or
+  s390x runtime has been supplied or verified.
+- GitHub Actions policy inspection returned HTTP 403 for this account. Workflow
+  execution/check results will be verified directly; no policy bypass requested.
 
 ## Contract differences requiring coordination
 
@@ -81,7 +87,7 @@ sequence. Tests use clearly labeled mocks and no live provider dependency.
 
 ## Foundation file and test plan
 
-Proposed owned implementation files (not yet created):
+Original foundation file plan (implemented below):
 
 - `backend/pyproject.toml`: Python >=3.11, FastAPI/Pydantic settings/HTTPX/Uvicorn,
   pytest/Ruff dev tools, package discovery and test/lint configuration.
@@ -105,7 +111,7 @@ Proposed owned implementation files (not yet created):
 - `backend/scripts/smoke.py`: loopback-only child server probe, bounded startup,
   verify status/liveness/readiness and clean shutdown.
 
-Tests will be added before or alongside each coherent implementation unit:
+Tests added alongside implementation units:
 
 | Test file | Acceptance assertions |
 | --- | --- |
@@ -116,22 +122,37 @@ Tests will be added before or alongside each coherent implementation unit:
 | `backend/tests/contracts/test_openapi.py` | Required paths and typed response/error schemas documented; no unimplemented forecast success claims; status response validates against declared schema |
 | `backend/tests/conftest.py` | Isolated app/settings/client and temporary paths; no dependence on developer `.env` or provider credentials |
 
-Intended validation commands from `backend/` after provisioning Python >=3.11:
+Validation commands from `backend/` using the Python 3.11.17 virtual environment:
 `python -m pytest`, `python -m ruff check .`,
 `python -m ruff format --check .`, `python scripts/smoke.py`.
-These commands have **not run** and no pass result is claimed.
+Actual latest results: **46 passed**, Ruff check passed, Ruff format check passed
+(20 Python files), and process smoke passed all eight checks including graceful
+shutdown. Earlier core-only run: 42 tests passed. Tests emit one upstream
+Starlette warning that HTTPX TestClient compatibility is deprecated; it is not
+suppressed. No provider network requests or skipped tests.
 
 ## Current milestone
 
-- Feature: API foundation, prerequisites and implementation plan only.
+- Feature: API foundation implemented; awaiting remote verification and merge gate.
 - Branch: `JS_feat/api-foundation`, based on synchronized main `658dee1`.
-- Completed: full backend-spec read; repository/remote/frontend inventory;
-  clean-tree check; GitHub permission/rules inspection; concrete plan and tests.
-- Tests: not run; no backend code exists yet.
-- Commit/push: this document's Git history records the planning commit. Remote
-  push is verified separately before reporting success.
-- PR/merge: no PR opened, no merge attempted; implementation gate not met.
-- Immediate blocker: missing mandatory frontend spec or approved substitute.
-- Subsequent prerequisite: Python >=3.11 runtime for local verification.
-- Integration contract changes: none; proposals above only. No teammate
-  notifications have been sent outside this task conversation.
+- Completed: app factory/lifespan, validated environment configuration, restricted
+  CORS, versioned status router, health probes, structured errors/request IDs,
+  safe JSON request logs, pytest unit/integration/contract tests, locked dependencies,
+  startup/environment docs, OpenAPI examples, process smoke and backend CI workflow.
+- Status explicitly reports no available data, null source/model metadata and 168
+  missing hours. Readiness covers API lifespan; data readiness is separate. No ML
+  generation, provider ingestion, database writes or scheduler is enabled.
+- Tests: 46 passed; lint/format/smoke passed locally. CI targets Linux Python
+  3.11/3.12 and Windows Python 3.11; results pending at this checkpoint.
+- Commit/push: `ca25177` planning and `b1f137d` core are confirmed remote. Subsequent
+  docs/CI commit is recorded in Git history and verified before PR handoff.
+- Latest main fetch: still `658dee1`; no concurrent changes to integrate.
+- PR/merge: PR not yet opened at this checkpoint; no merge attempted. Next:
+  push final CI/docs, open PR, check CI/review/policy, obtain merge authorization
+  if not established, verify merge, sync main and run post-merge smoke.
+- Integration contract changes: new operational routes/OpenAPI are implemented
+  under the primary backend spec; status differs from the older frozen handoff as
+  documented above. No existing shared JSON schemas or frontend/ML files changed.
+  PR description will carry the migration notice for frontend/ML reviewers.
+- Later integration prerequisites: authoritative ML grid/hourly artifacts and
+  shared-contract agreement, single scheduler owner, and actual s390x environment.

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ErrorDetail(BaseModel):
@@ -8,12 +8,18 @@ class ErrorDetail(BaseModel):
 
 
 class ErrorResponse(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [{"error": {"code": "not_found", "message": "Not Found", "details": {}}}]
+        }
+    )
     error: ErrorDetail
 
 
 ERROR_RESPONSES = {
     code: {"model": ErrorResponse, "description": description}
     for code, description in {
+        400: "Invalid request or disallowed CORS preflight",
         404: "Resource not found",
         405: "Method not allowed",
         422: "Request validation failed",
