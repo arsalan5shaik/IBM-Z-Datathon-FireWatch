@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 
+from app.api.v1.fires import router as fires_router
 from app.api.v1.forecasts import router as forecast_router
 from app.api.v1.status import health_router, router
 from app.api.v1.weather import router as weather_router
@@ -22,6 +23,7 @@ from app.errors import (
 )
 from app.schemas.errors import ERROR_RESPONSES
 from app.schemas.status import RuntimeState
+from app.services.fire_cache import FireCache
 from app.services.forecast_store import ForecastStore
 from app.services.weather_cache import WeatherCache
 from app.services.weather_provider import OpenMeteoProvider
@@ -63,6 +65,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.runtime = RuntimeState()
     app.state.forecasts = ForecastStore(settings)
+    app.state.fires = FireCache(settings)
     app.state.weather = None
     app.add_exception_handler(APIError, api_error)
     app.add_exception_handler(HTTPException, http_error)
@@ -80,5 +83,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(router)
     app.include_router(health_router)
     app.include_router(forecast_router)
+    app.include_router(fires_router)
     app.include_router(weather_router)
     return app
