@@ -131,7 +131,7 @@ export interface RiskGrid {
 
 // ---- /weather (hourly gridded) -------------------------------------------------
 export interface WeatherGrid {
-  metadata: { generated_at: string; source: string; forecast_start: string; step_minutes: number; frames: number; sample?: boolean; fetched_at?: string; cache_status?: 'fresh' | 'stale'; complete?: boolean; data_kind?: 'forecast' };
+  metadata: { generated_at: string; source: string; forecast_start: string; step_minutes: number; frames: number; sample?: boolean; fetched_at?: string; cache_status?: 'fresh' | 'stale'; complete?: boolean; data_kind?: 'forecast'; location_id?: string; provider_coordinates?: [number, number] };
   points: [number, number][];
   temperature_c: Float32Array;
   relative_humidity_pct: Float32Array;
@@ -141,6 +141,8 @@ export interface WeatherGrid {
   precipitation_mm: Float32Array;
 }
 export interface PointWeather {
+  sampling_coordinates?: [number, number];
+  provider_coordinates?: [number, number];
   complete?: boolean;
   fetched_at?: string;
   cache_status?: 'fresh' | 'stale';
@@ -188,6 +190,11 @@ export interface Explanation {
 // ---- /places -------------------------------------------------------------------
 export type PlaceType = 'city' | 'town' | 'cdp' | 'county' | 'zip';
 export interface PlaceResult {
+  display_name?: string;
+  boundary_available?: boolean;
+  dataset_source?: string;
+  dataset_version?: string;
+  dataset_url?: string;
   id: string;
   name: string;
   type: PlaceType;

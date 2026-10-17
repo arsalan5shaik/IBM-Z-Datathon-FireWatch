@@ -18,6 +18,13 @@ export async function fetchJson<T>(
   url: string,
   { timeoutMs = 20_000, signal, method = 'GET', body }: { timeoutMs?: number; signal?: AbortSignal; method?: string; body?: unknown } = {},
 ): Promise<T> {
+  if (signal?.aborted) throw new HttpError('aborted', 'Request cancelled');
+  const page = typeof window !== 'undefined' ? window.location.href : 'http://localhost/';
+  const target = new URL(url, page);
+  if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password)
+    throw new HttpError('invalid_api_url', 'An HTTP(S) API URL without credentials is required');
+  if (new URL(page).protocol === 'https:' && target.protocol !== 'https:')
+    throw new HttpError('insecure_api_url', 'This HTTPS page requires an HTTPS backend URL');
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(new DOMException('timeout', 'TimeoutError')), timeoutMs);
   const onAbort = () => ctrl.abort(signal?.reason);

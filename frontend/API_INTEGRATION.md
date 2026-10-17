@@ -32,7 +32,7 @@ a different valid hour. Explicit demo mode still uses labeled sample weather.
 | `GET /weather?latitude&longitude&hour` | implemented | optional point/cell API; map/panels reuse the statewide wind samples | 404 for unavailable hour; 503 for no usable cache |
 | `GET /explain/{cell_id}?hour` | planned | *Why this risk?* SHAP bars | “factors not provided yet” — never invented |
 | `POST /chat` | planned | FireWatch AI | offline assistant over loaded data |
-| places search / boundaries | not needed | bundled Census data (`public/data/`) | — |
+| `/locations/search`, `/locations/{id}/boundary` | implemented | debounced suggestions and selected boundary; `/places/*` aliases retained | explicit error in API mode; bundled Census data in demo mode |
 
 ### `GET /status` (implemented)
 Reads `status`, `runtime_arch`, `data_mode`, `forecast.{active_window_start, model_version, last_success_at}`,
@@ -80,8 +80,8 @@ Parsing is lenient so the first implementation should just work; the first name 
   that are set). Response: `answer`, `citations` (or `grounding`) `[{dataset, as_of}]`, `disclaimer`.
   Errors including `503 chatbot_unavailable` fall back to the offline assistant with a notice.
 - **Places** — the frontend ships Census boundaries and a search index (`public/data/places.json`, IDs
-  `place-ca-<name>`, `county-ca-<name>`, `zip-<ZIP>`). If `/places/*` is built, reusing that file keeps `place_id`
-  values identical between search and chat.
+  `place-ca-<name>`, `county-ca-<name>`, `zip-<ZIP>`). `/locations/*` now serves that same data in API mode;
+  bundled files remain the demo source and local context index. See the two ambiguous-ID corrections below.
 
 ## Open items for the backend / ML teams
 
@@ -95,6 +95,15 @@ The API batches/caches forecasts at stable 0.5-degree display anchors. This is a
 coarse display sample and not a 3 km weather grid. Forecast retrieval times are
 shown; Open-Meteo issue time is unknown. A new model forecast is not inferred from
 weather availability. See `backend/WEATHER_INTEGRATION.md` for ML blockers.
+
+Location-search update: selection calls `/weather` at Census representative
+coordinates and `/wind` within a bounded surrounding region at the same timeline
+hour. It clears previous-location weather immediately, cancels old requests and
+shows sample coordinates/fetch time. County weather is representative-point only.
+No silent sample-weather fallback in API mode. Dataset sources, corrected ambiguous
+IDs, missing ML mapping and public HTTPS backend setup are documented in
+`backend/LOCATIONS_INTEGRATION.md`. Pages builds use the optional repository Actions
+variable `VITE_API_BASE_URL`; the runtime `?api=` override remains supported.
 
 Rolling-window PR #3 has resolved status completeness and indexed cell-history
 reads described as open issues in the original notes above. Real ML handoff and

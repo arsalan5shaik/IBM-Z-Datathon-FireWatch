@@ -272,3 +272,11 @@ FIRMS integration is changed by this feature.
 Weather verification uses mock provider HTTP in CI. A separate manual provider
 check on 2026-10-17T20:48:38Z returned 169 records and all 168 future slots for one
 Sacramento-area coordinate. That is not a statewide availability guarantee.
+# California locations
+
+Search: `/api/v1/locations/search?q=Stockton&limit=10`; boundary:
+`/api/v1/locations/place-ca-stockton/boundary`. Offline indexed Census geography,
+dataset provenance, aliases, ZCTA limitations, frontend/weather behavior and
+HTTPS deployment configuration: [location handoff](LOCATIONS_INTEGRATION.md).
+Deployments must include the existing `frontend/public/data` geography or set
+`LOCATIONS_DATA_DIR`. ML cell mapping is explicitly unavailable pending its contract.

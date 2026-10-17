@@ -19,6 +19,7 @@ import type {
   FiresSnapshot,
   Incident,
   IncidentsSnapshot,
+  PlaceResult,
   RiskGrid,
   StatusResponse,
   WeatherGrid,
@@ -168,10 +169,11 @@ export class RemoteProvider implements DataProvider {
   }
 
   /** One-hour wind/weather snapshot from GET /wind?bbox&hour (GeoJSON points). */
-  async getWeather(validAtMs = Date.now()): Promise<WeatherGrid> {
+  async getWeather(validAtMs = Date.now(), bounds = CA_BBOX, signal?: AbortSignal): Promise<WeatherGrid> {
     const hour = floorHour(validAtMs);
-    const res = await fetchJson<FeatureCollection<Point> & { metadata?: Props }>(this.url('/wind', { bbox: CA_BBOX, hour: toIso(hour), density: 'medium' }), {
+    const res = await fetchJson<FeatureCollection<Point> & { metadata?: Props }>(this.url('/wind', { bbox: bounds, hour: toIso(hour), density: 'medium' }), {
       timeoutMs: 30_000,
+      signal,
     });
     if (Date.parse(String(res.metadata?.forecast_hour)) !== hour) throw new Error('Weather response hour does not match the selected hour');
     const feats = (res.features ?? []).filter((f) => f.geometry?.type === 'Point');
@@ -207,6 +209,35 @@ export class RemoteProvider implements DataProvider {
     if (weather.points.some(([lon, lat]) => !Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lat) > 90 || Math.abs(lon) > 180))
       throw new Error('Invalid weather forecast coordinates');
     return weather;
+  }
+
+  /** Representative-point weather plus bounded wind, sharing the backend cache. */
+  async getLocationWeather(place: PlaceResult, validAtMs: number, signal?: AbortSignal): Promise<WeatherGrid> {
+    const [lon, lat] = place.center;
+    const bounds = [Math.max(-124.6, lon - 0.5), Math.max(32.4, lat - 0.5),
+      Math.min(-114, lon + 0.5), Math.min(42.1, lat + 0.5)].join(',');
+    const hour = floorHour(validAtMs);
+    const [grid, row] = await Promise.all([
+      this.getWeather(hour, bounds, signal),
+      fetchJson<Props>(this.url('/weather', { latitude: lat, longitude: lon, hour: toIso(hour) }), { signal, timeoutMs: 30_000 }),
+    ]);
+    if (Date.parse(String(row.forecast_hour)) !== hour || row.source !== 'Open-Meteo')
+      throw new Error('Point weather source/hour does not match the selection');
+    const x = num(row.longitude), y = num(row.latitude);
+    const columns = ['temperature_c', 'relative_humidity_pct', 'precipitation_mm', 'wind_speed_kmh', 'wind_direction_deg', 'wind_gust_kmh'] as const;
+    if (x == null || y == null || x < -125 || x > -114 || y < 32 || y > 42.1 || columns.some(key => num(row[key]) == null))
+      throw new Error('Incomplete point forecast weather');
+    let index = grid.points.findIndex(([a, b]) => a === x && b === y);
+    if (index < 0) {
+      index = grid.points.length;
+      grid.points.push([x, y]);
+      for (const key of columns) grid[key] = Float32Array.from([...grid[key], Number(row[key])]);
+    } else for (const key of columns) grid[key][index] = Number(row[key]);
+    grid.metadata.location_id = place.id;
+    grid.metadata.fetched_at = String(row.fetched_at);
+    grid.metadata.cache_status = row.cache_status === 'stale' || grid.metadata.cache_status === 'stale' ? 'stale' : 'fresh';
+    grid.metadata.provider_coordinates = [Number(row.provider_longitude), Number(row.provider_latitude)];
+    return grid;
   }
 
   async explain(cellId: string, validAtMs: number): Promise<Explanation> {
