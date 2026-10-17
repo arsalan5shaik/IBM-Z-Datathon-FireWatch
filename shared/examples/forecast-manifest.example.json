@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "data_mode": "fixture",
+  "active_window_start": "2026-03-08T08:00:00Z",
+  "active_window_end_exclusive": "2026-03-15T08:00:00Z",
+  "published_at": "2026-03-08T07:59:00Z",
+  "hours": [
+    "2026-03-08T08:00:00Z"
+  ],
+  "grid_version": "mock-ca-grid-3km-v1",
+  "model_version": "mock-model-v1",
+  "feature_version": "mock-features-v1",
+  "input_revision": "mock-weather-v1"
+}

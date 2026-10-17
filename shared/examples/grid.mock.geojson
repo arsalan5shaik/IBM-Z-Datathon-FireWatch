@@ -1,0 +1,80 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {
+    "data_mode": "fixture",
+    "grid_version": "mock-ca-grid-3km-v1",
+    "grid_resolution_m": 3000,
+    "source_epsg": 3310,
+    "description": "MOCK fixture: two exact EPSG:3310 3000-meter squares, not an authoritative California grid"
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "cell_id": "MOCK_CA_000",
+        "grid_version": "mock-ca-grid-3km-v1"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -119.99999999999999,
+              36.21703841633879
+            ],
+            [
+              -119.9665880838399,
+              36.21703365915546
+            ],
+            [
+              -119.96657630484,
+              36.244031124416345
+            ],
+            [
+              -119.99999999999999,
+              36.24403588321365
+            ],
+            [
+              -119.99999999999999,
+              36.21703841633879
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "cell_id": "MOCK_CA_001",
+        "grid_version": "mock-ca-grid-3km-v1"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -119.9665880838399,
+              36.21703365915546
+            ],
+            [
+              -119.93317617597906,
+              36.21701938760725
+            ],
+            [
+              -119.93315261798806,
+              36.24401684802613
+            ],
+            [
+              -119.96657630484,
+              36.244031124416345
+            ],
+            [
+              -119.9665880838399,
+              36.21703365915546
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

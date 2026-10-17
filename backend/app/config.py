@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     request_timeout_seconds: float = Field(default=10, ge=0.1, le=60)
     cache_max_entries: int = Field(default=128, ge=1, le=10000)
+    allow_fixture_data: bool = False
+    forecast_cache_hours: int = Field(default=4, ge=1, le=24)
+    max_response_cells: int = Field(default=2000, ge=1, le=10000)
     provider_max_retries: int = Field(default=2, ge=0, le=5)
     firms_refresh_minutes: int = Field(default=15, ge=10, le=1440)
     weather_refresh_minutes: int = Field(default=60, ge=15, le=1440)

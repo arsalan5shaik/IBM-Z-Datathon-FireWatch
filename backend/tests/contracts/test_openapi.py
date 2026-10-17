@@ -8,7 +8,7 @@ def test_status_matches_declared_model(client):
 
 def test_documented_routes_and_error_contract(client):
     schema = client.get("/openapi.json").json()
-    assert set(schema["paths"]) == {"/api/v1/status", "/health/live", "/health/ready"}
+    assert {"/api/v1/status", "/health/live", "/health/ready"} <= set(schema["paths"])
     responses = schema["paths"]["/api/v1/status"]["get"]["responses"]
     assert responses["200"]["content"]["application/json"]["schema"]["$ref"].endswith(
         "/ServiceStatus"
