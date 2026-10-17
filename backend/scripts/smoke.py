@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -38,7 +39,7 @@ def serve(port: int) -> None:
     server.run()
 
 
-def smoke() -> None:
+def smoke(fixtures=False) -> None:
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
@@ -50,6 +51,18 @@ def smoke() -> None:
     env["CORS_ORIGINS"] = '["http://localhost:5173"]'
     script = Path(__file__).resolve()
     with tempfile.TemporaryDirectory(prefix="firewatch-smoke-") as directory:
+        if fixtures:
+            source = script.parents[2] / "shared/examples"
+            data = Path(directory) / "data"
+            (data / "predictions").mkdir(parents=True)
+            for src, dest in (
+                ("grid.mock.geojson", "grid.geojson"),
+                ("forecast-hour.example.json", "predictions/20260308T0800Z.json"),
+                ("forecast-manifest.example.json", "predictions/manifest.json"),
+            ):
+                shutil.copyfile(source / src, data / dest)
+            env["SHARED_DATA_DIR"] = str(data)
+            env["ALLOW_FIXTURE_DATA"] = "true"
         with tempfile.TemporaryFile() as logs:
             process = subprocess.Popen(
                 [sys.executable, str(script), "--serve", str(port)],
@@ -89,6 +102,20 @@ def smoke() -> None:
                     cors = client.get("/api/v1/status", headers={"Origin": "http://localhost:5173"})
                     assert cors.headers["access-control-allow-origin"] == "http://localhost:5173"
                     assert client.get("/openapi.json").status_code == 200
+                    if fixtures:
+                        response = client.get(
+                            "/api/v1/forecasts/risk",
+                            params={
+                                "hour": "2026-03-08T08:00:00Z",
+                                "bbox": "-120,36.22,-119.98,36.24",
+                            },
+                        )
+                        assert response.status_code == 200, response.text
+                        result = response.json()
+                        assert result["metadata"]["data_mode"] == "fixture"
+                        assert result["features"][0]["properties"]["risk_score"] == 0.72
+                        history = client.get("/api/v1/forecasts/cell/MOCK_CA_000").json()
+                        assert len(history["hours"]) == 168
                 process.stdin.write(b"stop\n")
                 process.stdin.flush()
                 assert process.wait(timeout=10) == 0, "Server did not exit gracefully"
@@ -109,6 +136,7 @@ def smoke() -> None:
         json.dumps(
             {
                 "smoke": "passed",
+                "fixture_forecasts": fixtures,
                 "checks": [
                     "startup",
                     "live",
@@ -128,4 +156,4 @@ if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "--serve":
         serve(int(sys.argv[2]))
     else:
-        smoke()
+        smoke(fixtures="--fixtures" in sys.argv)
