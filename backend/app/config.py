@@ -28,8 +28,13 @@ class Settings(BaseSettings):
     weather_provider: Literal["open-meteo"] = "open-meteo"
     forecast_hours: Literal[168] = 168
     grid_resolution_m: Literal[3000] = 3000
-    # Foundation cannot safely enable a scheduler or invoke a generator.
-    job_enabled: Literal[False] = False
+    job_enabled: bool = False
+    scheduler_owner: Literal["unassigned", "backend", "ml"] = "unassigned"
+    generator_timeout_seconds: int = Field(default=300, ge=1, le=3600)
+    generator_max_retries: int = Field(default=2, ge=0, le=5)
+    generator_retry_seconds: float = Field(default=1, ge=0, le=30)
+    forecast_retention_hours: int = Field(default=24, ge=1, le=168)
+    min_free_disk_mb: int = Field(default=512, ge=1, le=100000)
     forecast_generator_cmd: SecretStr | None = Field(default=None, repr=False)
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     request_timeout_seconds: float = Field(default=10, ge=0.1, le=60)
@@ -75,6 +80,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def resolve_paths(self) -> "Settings":
+        if self.job_enabled and self.scheduler_owner != "backend":
+            raise ValueError("Backend jobs require explicit scheduler_owner=backend")
         for name in ("shared_data_dir", "sqlite_path"):
             value = getattr(self, name)
             if not value.is_absolute():

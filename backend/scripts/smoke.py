@@ -94,9 +94,9 @@ def smoke(fixtures=False) -> None:
                     status = client.get("/api/v1/status")
                     assert status.status_code == 200
                     data = status.json()
-                    assert data["data_mode"] == "unavailable"
-                    assert data["forecast"]["missing_hour_count"] == 168
-                    assert data["forecast"]["model_version"] is None
+                    assert data["data_mode"] == ("fixture" if fixtures else "unavailable")
+                    assert data["forecast"]["missing_hour_count"] == (167 if fixtures else 168)
+                    assert (data["forecast"]["model_version"] is None) is (not fixtures)
                     assert status.headers["x-request-id"]
                     assert client.get("/not-found").json()["error"]["code"] == "not_found"
                     cors = client.get("/api/v1/status", headers={"Origin": "http://localhost:5173"})

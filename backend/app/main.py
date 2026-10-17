@@ -46,8 +46,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version="0.1.0",
         description=(
             "California wildfire intelligence. Experimental risk is distinct from satellite "
-            "observations and official incidents. Foundation serves operational status only; "
-            "no forecast or live provider data is available yet."
+            "observations and official incidents. Serves validated hourly forecast artifacts; "
+            "fixture data is explicitly labeled. GET requests never trigger inference."
         ),
         lifespan=lifespan,
         responses=ERROR_RESPONSES,

@@ -3,10 +3,20 @@ from datetime import UTC, datetime
 from threading import RLock
 
 from app.errors import APIError
+from app.persistence.sqlite import read_job
 from app.schemas.forecast import HourArtifact, Manifest
 from app.services.grid import Grid
 from app.services.jsonio import read_json
-from app.services.time import iso
+from app.services.score_index import read_index
+from app.services.time import iso, next_hour
+
+
+def safe_path(root, reference):
+    Manifest.safe_reference(reference)
+    path = (root / reference).resolve()
+    if not path.is_relative_to(root.resolve()) or path == root.resolve():
+        raise ValueError("Artifact outside store")
+    return path
 
 
 class ForecastStore:
@@ -20,42 +30,55 @@ class ForecastStore:
 
     def snapshot(self):
         with self.lock:
-            try:
-                manifest = Manifest.model_validate(
-                    read_json(self.directory / "predictions/manifest.json")
-                )
-                path = self.directory / "grid.geojson"
-                stamp = (path.stat().st_mtime_ns, path.stat().st_size)
-                if self.grid is None or stamp != self.grid_stamp:
-                    boundary_path = self.directory / "california.geojson"
-                    boundary = (
-                        read_json(boundary_path)["geometry"] if boundary_path.exists() else None
+            for name in ("manifest.json", "manifest.previous.json"):
+                try:
+                    manifest = Manifest.model_validate(
+                        read_json(self.directory / "predictions" / name)
                     )
-                    grid = Grid(read_json(path), boundary)
-                    self.grid, self.grid_stamp = grid, stamp
-                    self.cache.clear()
-                if (
-                    manifest.grid_version != self.grid.version
-                    or manifest.data_mode != self.grid.mode
-                ):
-                    raise ValueError("Manifest/grid mismatch")
-                if manifest.data_mode == "fixture" and not self.settings.allow_fixture_data:
-                    raise ValueError("Fixture mode not enabled")
-                return manifest, self.grid
-            except (OSError, ValueError, KeyError, TypeError):
-                raise APIError(
-                    "forecast_not_ready", "Validated forecast artifacts are unavailable"
-                ) from None
+                    path = safe_path(self.directory, manifest.grid_artifact)
+                    boundary_path = safe_path(self.directory, manifest.boundary_artifact)
+                    boundary_stamp = (
+                        (
+                            str(boundary_path),
+                            boundary_path.stat().st_mtime_ns,
+                            boundary_path.stat().st_size,
+                        )
+                        if boundary_path.exists()
+                        else None
+                    )
+                    stamp = (
+                        str(path),
+                        path.stat().st_mtime_ns,
+                        path.stat().st_size,
+                        boundary_stamp,
+                    )
+                    if self.grid is None or stamp != self.grid_stamp:
+                        boundary = read_json(boundary_path)["geometry"] if boundary_stamp else None
+                        grid = Grid(read_json(path), boundary)
+                        self.grid, self.grid_stamp = grid, stamp
+                        self.cache.clear()
+                    if (
+                        manifest.grid_version != self.grid.version
+                        or manifest.data_mode != self.grid.mode
+                    ):
+                        raise ValueError("Manifest/grid mismatch")
+                    if manifest.data_mode == "fixture" and not self.settings.allow_fixture_data:
+                        raise ValueError("Fixture mode not enabled")
+                    manifest._recovered = name != "manifest.json"
+                    return manifest, self.grid
+                except (OSError, ValueError, KeyError, TypeError):
+                    continue
+            raise APIError("forecast_not_ready", "Validated forecast artifacts are unavailable")
 
     def artifact_path(self, manifest, hour):
         name = manifest.artifacts.get(iso(hour), hour.strftime("%Y%m%dT%H00Z.json"))
         root = (self.directory / "predictions").resolve()
-        path = (root / name).resolve()
-        if not path.is_relative_to(root) or path == root or path.suffix != ".json":
+        path = safe_path(root, name)
+        if path.suffix != ".json":
             raise ValueError("Invalid artifact reference")
         return path
 
-    def hour(self, manifest, grid, hour):
+    def hour(self, manifest, grid, hour, cells=None):
         if hour not in manifest.hours:
             raise APIError("forecast_hour_unavailable", "Requested hour is unavailable", 404)
         with self.lock:
@@ -63,11 +86,20 @@ class ForecastStore:
                 path = self.artifact_path(manifest, hour)
                 info = path.stat()
                 key = (str(path), info.st_mtime_ns, info.st_size)
-                if key in self.cache:
+                indexed = read_index(path, grid.cells if cells is None else cells)
+                if indexed is not None:
+                    artifact, values, count = indexed
+                    artifact._cell_count = count
+                elif key in self.cache:
                     artifact, values = self.cache.pop(key)
                 else:
                     artifact = HourArtifact.model_validate(read_json(path))
+                    artifact._cell_count = len(artifact.predictions)
                     values = {p.cell_id: p.risk_score for p in artifact.predictions}
+                if manifest.validated_cell_count is not None and artifact._cell_count != len(
+                    grid.cells
+                ):
+                    raise ValueError("Validated grid count mismatch")
                 for field in (
                     "grid_version",
                     "model_version",
@@ -79,17 +111,18 @@ class ForecastStore:
                         raise ValueError("Artifact/manifest mismatch")
                 if artifact.forecast_hour != hour or values.keys() - grid.cells.keys():
                     raise ValueError("Unexpected hour or grid cells")
-                self.cache[key] = artifact, values
-                while len(self.cache) > self.settings.forecast_cache_hours:
-                    self.cache.popitem(last=False)
+                if indexed is None:
+                    self.cache[key] = artifact, values
+                    while len(self.cache) > self.settings.forecast_cache_hours:
+                        self.cache.popitem(last=False)
                 return artifact, values
             except (OSError, ValueError, KeyError, TypeError):
                 raise APIError(
                     "forecast_artifact_invalid", "Forecast artifact failed validation"
                 ) from None
 
-    @staticmethod
-    def metadata(manifest):
+    def metadata(self, manifest, now=None):
+        job = read_job(self.settings.sqlite_path)
         return {
             "data_mode": manifest.data_mode,
             "source": "mock_fixture" if manifest.data_mode == "fixture" else "ml_artifact",
@@ -101,7 +134,13 @@ class ForecastStore:
             "input_revision": manifest.input_revision,
             "grid_version": manifest.grid_version,
             "grid_resolution_m": 3000,
-            "stale": datetime.now(UTC) >= manifest.active_window_start,
+            "stale": (
+                bool(job.get("last_error"))
+                or manifest._recovered
+                or len(manifest.hours) != 168
+                or next_hour(now or datetime.now(UTC)) != manifest.active_window_start
+            ),
+            "recovered": manifest._recovered,
             "risk_categories": {"low": [0, 0.4], "elevated": [0.4, 0.7], "high": [0.7, 1]},
             "risk_colors": {"low": "orange", "elevated": "red", "high": "purple"},
         }

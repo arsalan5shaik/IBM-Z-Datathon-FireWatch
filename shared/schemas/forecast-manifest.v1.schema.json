@@ -72,6 +72,30 @@
       },
       "title": "Artifacts",
       "type": "object"
+    },
+    "grid_artifact": {
+      "default": "grid.geojson",
+      "title": "Grid Artifact",
+      "type": "string"
+    },
+    "boundary_artifact": {
+      "default": "california.geojson",
+      "title": "Boundary Artifact",
+      "type": "string"
+    },
+    "validated_cell_count": {
+      "anyOf": [
+        {
+          "maximum": 100000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Validated Cell Count"
     }
   },
   "required": [

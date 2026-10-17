@@ -1,7 +1,8 @@
 from datetime import datetime
+from pathlib import PurePosixPath
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
 from app.services.time import utc_hour
 
@@ -19,6 +20,7 @@ class Prediction(Contract):
 
 
 class HourArtifact(Contract):
+    _cell_count: int = PrivateAttr(default=0)
     schema_version: Literal["1.0"]
     data_mode: Literal["fixture", "live"]
     forecast_hour: datetime
@@ -59,6 +61,7 @@ class HourArtifact(Contract):
 
 
 class Manifest(Contract):
+    _recovered: bool = PrivateAttr(default=False)
     schema_version: Literal["1.0"]
     data_mode: Literal["fixture", "live"]
     active_window_start: datetime
@@ -71,6 +74,17 @@ class Manifest(Contract):
     published_at: datetime
     # Optional immutable artifact references are introduced for safe revision publication.
     artifacts: dict[str, str] = Field(default_factory=dict)
+    grid_artifact: str = "grid.geojson"
+    boundary_artifact: str = "california.geojson"
+    validated_cell_count: int | None = Field(default=None, ge=1, le=100000)
+
+    @field_validator("grid_artifact", "boundary_artifact")
+    @classmethod
+    def safe_reference(cls, value):
+        path = PurePosixPath(value)
+        if not value or path.is_absolute() or ".." in path.parts or "\\" in value or ":" in value:
+            raise ValueError("Artifact reference must stay inside its store")
+        return value
 
     @field_validator(
         "active_window_start", "active_window_end_exclusive", "published_at", mode="before"
@@ -101,4 +115,9 @@ class Manifest(Contract):
         if any(not self.active_window_start <= h < self.active_window_end_exclusive for h in hours):
             raise ValueError("Hour outside manifest window")
         self.hours = hours
+        canonical = {h.isoformat().replace("+00:00", "Z") for h in hours}
+        if self.artifacts.keys() - canonical:
+            raise ValueError("Artifact references must match listed canonical UTC hours")
+        for value in self.artifacts.values():
+            self.safe_reference(value)
         return self

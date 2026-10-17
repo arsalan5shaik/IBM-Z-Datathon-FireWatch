@@ -21,6 +21,12 @@ Contract additions to the architecture's illustrative JSON:
 - Optional manifest `artifacts` maps canonical UTC hours to relative JSON paths
   under predictions/. This supports immutable versioned files and manifest-last
   revision publication. Absolute/outside-directory references are rejected.
+- Optional `grid_artifact` and `boundary_artifact` reference immutable geometry
+  relative to the shared data root, defaulting to `grid.geojson` and
+  `california.geojson` for legacy manifests. `validated_cell_count` records the
+  publisher's complete-grid validation. Readers validate source metadata as well;
+  this count is not a substitute for validation. These additive fields require
+  upgrading older strict readers before enabling the new publisher.
 - Grid FeatureCollection `metadata` includes `grid_version`, `grid_resolution_m:3000`,
   `source_epsg:3310`, and `data_mode`. Features carry cell_id and grid_version.
   Geometry is EPSG:4326 `[longitude,latitude]`; generated 3,000 m cells must originate
@@ -42,7 +48,13 @@ Manifest hours are sorted unique available slots inside a 168-hour UTC window;
 end is exclusive. Risk requires exactly one UTC `hour` or California `date` plus
 WGS84 `bbox=w,s,e,n`. Default response cap is 2,000 cells, exceeded requests return
 422 without truncation. Geometry is stored once. Only selected hourly artifacts
-are loaded, with a bounded 4-hour LRU; cell history returns at most 168 records.
+are loaded, with a bounded 4-hour LRU for legacy files. Backend publication creates
+an immutable SQLite score index beside each JSON file before the manifest commit.
+Indexed bbox/cell requests select only matching cell IDs; cell history returns
+at most 168 records without parsing all 168 full-grid prediction arrays. Indexes
+are derived backend caches, not ML inputs or a replacement interchange format.
+Missing/damaged indexes fall back to validated JSON and are rebuilt by the next
+scheduler run; GET never writes files or invokes inference.
 
 Daily aggregation is max_hourly_risk (default) or mean_hourly_risk, an index,
 never an aggregated probability. Report expected/coverage/missing hours and
@@ -52,3 +64,16 @@ partial coverage; it must not infer seven complete days. Risk color thresholds
 are display conventions: low <0.4 orange, elevated <0.7 red, high >=0.7 purple.
 They are not empirical calibration claims. Default/Terrain and 2D/3D remain view
 state and never invoke inference.
+
+## Rolling-window handoff (feature 3 integration notice)
+
+Backend scheduling is opt-in: `JOB_ENABLED=true`, `SCHEDULER_OWNER=backend`, and
+an ML-owned `FORECAST_GENERATOR_CMD` JSON argv array. With ML-owned scheduling,
+leave backend jobs disabled. No real inference entry point is supplied here.
+`backend/README.md` defines the CLI request and publication/rollback procedure.
+`examples/forecast-revision.example.json` is explicitly a fixture revision, not
+weather data or a trained model. The scheduler requests complete grids for missing
+hours. Any changed input/model/feature/grid/score/target revision invalidates the
+entire affected window because ML has not supplied a finer dependency map.
+The PR carrying this change is the ML/frontend integration notice; actual live
+handoff agreement remains required before connecting real artifacts.

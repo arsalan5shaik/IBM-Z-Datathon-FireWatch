@@ -27,8 +27,8 @@ class ForecastStatus(SubsystemStatus):
 
 
 class SchedulerStatus(BaseModel):
-    enabled: Literal[False] = False
-    owner: Literal["unassigned"] = "unassigned"
+    enabled: bool = False
+    owner: Literal["unassigned", "backend", "ml"] = "unassigned"
     last_success_at: AwareDatetime | None = None
     next_run_at: AwareDatetime | None = None
     last_error: str | None = None
@@ -65,7 +65,7 @@ class ServiceStatus(BaseModel):
     checked_at: AwareDatetime
     started_at: AwareDatetime | None
     runtime_arch: str
-    data_mode: Literal["unavailable"] = "unavailable"
+    data_mode: Literal["unavailable", "fixture", "live"] = "unavailable"
     api: SubsystemStatus
     forecast: ForecastStatus = Field(default_factory=ForecastStatus)
     providers: dict[str, SubsystemStatus]

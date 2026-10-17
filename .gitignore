@@ -13,6 +13,7 @@ htmlcov/
 backend/build/
 backend/dist/
 shared/data/predictions/
+shared/data/grids/
 shared/data/explanations/
 shared/data/provider-cache/
 *.sqlite
