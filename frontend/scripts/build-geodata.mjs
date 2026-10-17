@@ -51,7 +51,13 @@ async function ensureDownloaded() {
 async function run(commands) {
   const out = await mapshaper.applyCommands(commands);
   const [name] = Object.keys(out);
-  return JSON.parse(out[name]);
+  // Export rounding can introduce tiny ring intersections. Re-import the rounded
+  // geometry and repair topology, preserving overlaps between distinct records.
+  const clean = await mapshaper.applyCommands(
+    '-i rounded.geojson -clean allow-overlaps -o cleaned.geojson precision=0.00001',
+    { 'rounded.geojson': out[name] },
+  );
+  return JSON.parse(clean['cleaned.geojson']);
 }
 
 const slug = (s) =>
@@ -199,6 +205,18 @@ async function main() {
     });
     placeFeatures.push({ type: 'Feature', id, properties: { id, shard: slug(county) }, geometry: f.geometry });
   }
+  // A natural name can collide with another place's county-qualified slug
+  // (Spring Valley Lake vs Spring Valley in Lake County). Resolve both records
+  // deterministically before publishing any index or boundary shards.
+  const idCounts = new Map();
+  for (const p of placeIndex) idCounts.set(p.id, (idCounts.get(p.id) ?? 0) + 1);
+  placeIndex.forEach((p, i) => {
+    if (idCounts.get(p.id) > 1) {
+      p.id = `${p.id}-county-${slug(p.county)}`;
+      placeFeatures[i].id = p.id;
+      placeFeatures[i].properties.id = p.id;
+    }
+  });
   // Shard by county: selecting a city only downloads that county's places.
   const placeDir = path.join(OUT, 'boundaries/places');
   await fs.rm(placeDir, { recursive: true, force: true });

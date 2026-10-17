@@ -1,5 +1,11 @@
 # Proposed FireWatch JSON interchange
 
+Location-search integration notice: `/locations/*` serves existing Census data
+and `/places/*` remains an alias. All stable IDs are retained except two colliding
+Spring Valley/Lake IDs, explicitly corrected in
+`backend/LOCATIONS_INTEGRATION.md`. ML grid-cell mapping remains blocked; display
+boundaries are not authoritative inference grids or precise area inputs.
+
 These new contracts implement the primary backend architecture. No pre-existing
 shared schemas were found or overwritten. ML owns authoritative grid geometry,
 stable cell IDs, model/feature versions, score/target semantics, inference and SHAP.
