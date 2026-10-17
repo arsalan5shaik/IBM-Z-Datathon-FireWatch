@@ -59,8 +59,9 @@ generator, background scheduler or model. No runtime files are created at startu
 
 Source timestamps and model/grid/input versions remain null until corresponding
 validated artifacts exist. `checked_at` and `started_at` are actual API lifecycle
-timestamps in UTC, not evidence of ingestion. Do not label this response as sample
-predictions or live fire data; it explicitly describes unavailable data.
+timestamps in UTC, not evidence of ingestion. These lifecycle timestamps are not sample predictions or evidence of fire ingestion.
+Forecast data mode remains unavailable until validated forecast artifacts exist;
+`providers.firms` separately reports cached satellite observation availability.
 
 Errors use `{"error":{"code":"not_found","message":"Not Found","details":{}}}`.
 HTTP 404, 405, 422, 500, 503 and rejected CORS preflight 400 use this envelope.
