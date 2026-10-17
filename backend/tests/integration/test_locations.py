@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,10 @@ from app.config import Settings
 from app.main import create_app
 from app.services.grid import geometry_bounds
 from app.services.locations import LocationStore
+from app.services.time import iso
+from app.services.weather_cache import WeatherCache
+from tests.unit.test_weather_cache import MockProvider
+from tests.unit.test_weather_provider import NOW
 
 DATA = Path(__file__).resolve().parents[3] / "frontend/public/data"
 
@@ -119,6 +124,22 @@ def test_boundary_cache_and_preserved_geometry(locations, monkeypatch):
     assert locations.boundary(first["id"]) is first
 
 
+def test_entire_bundled_catalog_has_valid_geometry_and_bounded_caches(locations):
+    locations.load()
+    types, holes = set(), 0
+    for key in locations.records:
+        result = locations.boundary(key)
+        geometry = result["geometry"]
+        types.add(geometry["type"])
+        parts = (
+            [geometry["coordinates"]] if geometry["type"] == "Polygon" else geometry["coordinates"]
+        )
+        holes += sum(len(part) - 1 for part in parts)
+        assert result["metadata"]["simplification_m"] in (90, 100, 250)
+    assert types == {"Polygon", "MultiPolygon"} and holes > 0
+    assert len(locations.boundaries) == 128 and len(locations.shards) <= 32
+
+
 def test_missing_and_blocked_grid(geo_client, client):
     assert geo_client.get("/api/v1/locations/not-real/boundary").status_code == 404
     assert (
@@ -128,9 +149,42 @@ def test_missing_and_blocked_grid(geo_client, client):
     assert client.get("/api/v1/locations/search?q=Stockton").status_code == 503
 
 
+def test_location_weather_coordinates_hour_cache_and_no_inference(tmp_path):
+    settings = Settings(_env_file=None, repo_root=tmp_path, locations_data_dir=DATA)
+    app = create_app(settings)
+    provider = MockProvider()  # Automated tests only; live browser test never mocks providers.
+    app.state.weather = WeatherCache(provider, settings, lambda: NOW)
+    with TestClient(app) as client:
+        hour = iso(NOW + timedelta(hours=1))
+        revisions = []
+        for query in ("Stockton", "San Joaquin County", "95202"):
+            record = client.get("/api/v1/locations/search", params={"q": query}).json()["results"][
+                0
+            ]
+            result = client.get(
+                "/api/v1/weather",
+                params={
+                    "latitude": record["latitude"],
+                    "longitude": record["longitude"],
+                    "hour": hour,
+                },
+            )
+            assert result.status_code == 200
+            row = result.json()
+            assert row["forecast_hour"] == hour and row["source"] == "Open-Meteo"
+            assert row["latitude"] == 38 and row["longitude"] == -121.5
+            revisions.append(row["revision"])
+        wind = client.get("/api/v1/wind", params={"hour": hour, "bbox": "-121.6,37.9,-121.4,38.1"})
+        assert wind.status_code == 200 and wind.json()["metadata"]["forecast_hour"] == hour
+        assert len(set(revisions)) == 1 and provider.calls == 1
+        assert client.get("/api/v1/status").json()["forecast"]["valid_hour_count"] == 0
+        assert not (tmp_path / "shared/data/predictions").exists()
+
+
 @pytest.mark.parametrize(
     "geometry",
     [
+        None,
         {"type": "Polygon", "coordinates": [[[0, 0], [2, 2], [0, 2], [2, 0], [0, 0]]]},
         {"type": "Polygon", "coordinates": [[[-121, 38], [-120, 38], [-121, 39]]]},
         {"type": "Polygon", "coordinates": [[[500000, 4200000]] * 4]},

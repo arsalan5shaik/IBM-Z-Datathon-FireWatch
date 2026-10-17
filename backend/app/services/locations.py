@@ -35,6 +35,8 @@ def grams(value: str, size: int) -> set[str]:
 
 def display_bounds(geometry):
     """Validate WGS84 rings, using an x sweep to avoid quadratic statewide rings."""
+    if not isinstance(geometry, dict) or "crs" in geometry:
+        raise ValueError("WGS84 geometry required")
     bounds = geometry_bounds(geometry, validate=False)
     for polygon in polygons(geometry):
         for ring in polygon:
@@ -111,7 +113,7 @@ class LocationStore:
                         index[gram].add(record.id)
                 self.records, self.names, self.index = records, names, index
                 self.loaded = True
-            except (OSError, ValueError, KeyError, TypeError):
+            except (OSError, ValueError, KeyError, TypeError, AttributeError, IndexError):
                 raise APIError(
                     "locations_unavailable",
                     "Local California geographic catalog is invalid or missing",
@@ -223,7 +225,7 @@ class LocationStore:
                 if len(self.boundaries) > 128:
                     self.boundaries.popitem(last=False)
                 return result
-            except (OSError, ValueError, KeyError, TypeError):
+            except (OSError, ValueError, KeyError, TypeError, AttributeError, IndexError):
                 raise APIError(
                     "boundary_invalid", "Geographic boundary failed validation", 503
                 ) from None

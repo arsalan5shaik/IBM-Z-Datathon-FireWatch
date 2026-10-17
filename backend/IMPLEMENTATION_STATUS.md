@@ -1,6 +1,33 @@
 # Backend implementation status
 
-## Active feature: weather-inference
+## Active feature: location-search
+
+- Branch: `JS_feat/location-search`, isolated `firewatch-location-worktree`, based
+  on origin/main `0b97c15`. Weather rollover PR #6 is merged. The uncommitted Pages
+  workflow edit in the shared main worktree is preserved and was not staged.
+- Implemented: indexed offline search and cached Census boundaries at `/locations/*`
+  with `/places/*` aliases, explicit unavailable ML mapping, typed metadata, 3,478
+  validated boundaries, two corrected colliding IDs and 21 display topology repairs.
+- Existing frontend search/camera/highlight/timeline/weather/wind are reused.
+  Selected locations retrieve real `/weather` and bounded `/wind` responses at
+  representative coordinates; cancellation, selection/hour guards, immediate
+  clearing and explicit errors prevent stale or fake live weather. Sampling,
+  forecast valid time, refresh time, freshness and county limitations are visible.
+- Pages triggers only on main, without path filters; optional repository variable
+  `VITE_API_BASE_URL` supplies HTTPS backend configuration. Runtime override and
+  explicit demo mode remain. No public backend URL is configured; public live
+  weather and authoritative ML grid mapping remain BLOCKED.
+- Commit/push: `ebab12a` backend/catalog milestone pushed. Targeted backend tests:
+  51 passed. Frontend: 34 passed plus TypeScript. Full final regression pending.
+- Real Chrome test (no route mocks): Stockton keyboard search/boundary/camera,
+  next hour, Sacramento replacement/hour preservation, 95202 ZCTA, county weather,
+  tablet/mobile viewport, backend offline clearing and recovery all PASS.
+  Real Open-Meteo fetched 440 batched display anchors and subsequent selections
+  used valid provider cache. No real inference was triggered.
+- Contract changes/provenance/hosting: `LOCATIONS_INTEGRATION.md`, shared README
+  and frontend API handoff. Other ML/FIRMS work is unchanged. PR/CI/merge pending.
+
+## Historical weather-inference checkpoint (PRs #4 and #6 now merged)
 
 - Branch: `JS_feat/weather-inference`, isolated `firewatch-weather-worktree`, based
   on remote main `84ec358` with rolling-window PR #3 merged. No FIRMS branch or ML

@@ -2,7 +2,7 @@ name: Frontend → GitHub Pages
 
 on:
   push:
-    branches: [main, AS_feat]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -31,9 +31,11 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
-      # No VITE_API_BASE_URL: the public demo runs on clearly labelled sample data.
+      # Empty variable keeps the public demo on clearly labelled sample data.
       # Point it at a deployed backend with  ?api=https://host/api/v1  at run time.
       - run: npx vite build
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:

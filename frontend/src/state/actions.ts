@@ -1,4 +1,6 @@
-import { loadBoundary, loadCaBoundary } from '../api/static';
+import { loadCaBoundary } from '../api/static';
+import { locationBoundary } from '../api/locations';
+import { API_BASE } from '../config';
 import { pointInGeometry, type LngLat } from '../lib/geo';
 import { loadJson, saveJson } from '../lib/storage';
 import { placeTitle } from '../lib/search';
@@ -11,23 +13,35 @@ import { getState, select, setState, toast, validTimeOf, type ChatContext } from
 
 const RECENT_KEY = 'recent-places';
 export const recentPlaceIds = () => loadJson<string[]>(RECENT_KEY, []);
+let boundaryRequest = 0;
+let boundaryAbort: AbortController | null = null;
 
 /** Select a search result: highlight its boundary, fit the map to it and open its panel. */
 export async function choosePlace(place: PlaceResult, { fly = true } = {}) {
-  setState({ highlight: { place, boundary: null } });
+  const request = ++boundaryRequest;
+  boundaryAbort?.abort();
+  const ctrl = new AbortController();
+  boundaryAbort = ctrl;
+  setState(s => ({ highlight: { place, boundary: null },
+    ...(API_BASE && s.highlight?.place.id !== place.id ? { weather: { ...s.weather, data: null, state: 'loading', error: null } } : {}),
+  }));
   select({ kind: 'place', place });
   if (fly) fitBbox(place.bbox, place.type === 'county' ? 10 : place.type === 'zip' ? 13 : 12.5);
   saveJson(RECENT_KEY, [place.id, ...recentPlaceIds().filter((id) => id !== place.id)].slice(0, 5));
   try {
-    const boundary = await loadBoundary(place);
+    const boundary = await locationBoundary(place, ctrl.signal);
+    if (request !== boundaryRequest) return;
     if (getState().highlight?.place.id === place.id) setState({ highlight: { place, boundary } });
-    if (!boundary) toast(`No boundary available for ${placeTitle(place)} — showing its approximate area.`);
+    if (!boundary) toast(`No boundary available for ${placeTitle(place)}.`);
   } catch {
+    if (request !== boundaryRequest || ctrl.signal.aborted) return;
     toast(`Couldn’t load the outline for ${placeTitle(place)}.`, 'error');
   }
 }
 
 export function clearSearch() {
+  ++boundaryRequest;
+  boundaryAbort?.abort();
   const s = getState();
   setState({ highlight: null });
   if (s.selection?.kind === 'place') select(null);

@@ -71,31 +71,38 @@ export async function loadIncidents() {
 }
 
 // The backend serves weather one hour at a time; keep a small per-hour cache.
-const weatherCache = new Map<number, { grid: WeatherGrid; loadedAt: number }>();
+const weatherCache = new Map<string, { grid: WeatherGrid; loadedAt: number }>();
 let weatherRequest = 0;
+let weatherAbort: AbortController | null = null;
 export async function loadWeather(force = false) {
   const hour = floorHour(validTimeOf(getState()));
+  const place = getState().highlight?.place;
+  const key = `${hour}|${place?.id ?? ''}`;
   if (!remote) return load('weather', (p) => p.getWeather(hour));
   const request = ++weatherRequest;
+  weatherAbort?.abort();
+  const ctrl = new AbortController();
+  weatherAbort = ctrl;
   if (!force) {
-    const cached = weatherCache.get(hour);
+    const cached = weatherCache.get(key);
     if (cached && Date.now() - cached.loadedAt < 60_000)
       return setState({ weather: { state: 'ready', data: cached.grid, origin: 'api', error: null, at: cached.loadedAt } });
   }
-  const previous = getState().weather;
+  const previous = { ...getState().weather };
+  if (previous.data?.metadata.location_id !== place?.id) previous.data = null;
   setState({ weather: { ...previous, state: 'loading', error: null } });
   try {
-    const data = await remote.getWeather(hour);
-    if (request !== weatherRequest || floorHour(validTimeOf(getState())) !== hour) return;
+    const data = place ? await remote.getLocationWeather(place, hour, ctrl.signal) : await remote.getWeather(hour);
+    if (request !== weatherRequest || floorHour(validTimeOf(getState())) !== hour || getState().highlight?.place.id !== place?.id) return;
     const at = Date.now();
     const stale = data.metadata.cache_status === 'stale';
     setState({ weather: { state: 'ready', data, origin: 'api', error: stale ? 'Showing stale forecast weather' : null, at } });
-    if (!stale) weatherCache.set(hour, { grid: data, loadedAt: at });
+    if (!stale) weatherCache.set(key, { grid: data, loadedAt: at });
     if (weatherCache.size > 24) weatherCache.delete(weatherCache.keys().next().value!);
   } catch (error) {
-    if (request !== weatherRequest || floorHour(validTimeOf(getState())) !== hour) return;
+    if (request !== weatherRequest || floorHour(validTimeOf(getState())) !== hour || getState().highlight?.place.id !== place?.id) return;
     // Keep labeled last-good data; lookups reject it outside its exact valid hour.
-    setState({ weather: { ...previous, data: previous.origin === 'api' ? previous.data : null, state: 'error', origin: 'api', error: errMsg(error) } });
+    setState({ weather: { ...previous, data: place ? null : previous.origin === 'api' ? previous.data : null, state: 'error', origin: 'api', error: errMsg(error) } });
   }
 }
 
@@ -156,7 +163,7 @@ export function startData() {
     // Backend weather is per hour: follow the timeline (debounced so playback doesn't flood the API).
     let timer = 0;
     useStore.subscribe(
-      (s) => floorHour(validTimeOf(s)),
+      (s) => `${floorHour(validTimeOf(s))}|${s.highlight?.place.id ?? ''}`,
       () => {
         clearTimeout(timer);
         timer = window.setTimeout(() => void loadWeather(), getState().playing ? 600 : 150);

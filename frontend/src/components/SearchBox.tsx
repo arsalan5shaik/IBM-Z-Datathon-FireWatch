@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Building2, Clock, Hash, Home, Loader2, Map as MapIcon, MapPin, Navigation, Search, X } from 'lucide-react';
-import { QUICK_PLACES } from '../config';
+import { API_BASE, QUICK_PLACES } from '../config';
+import { searchLocations } from '../api/locations';
 import { normalize, placeSubtitle, placeTitle, searchPlaces, type SearchOutcome } from '../lib/search';
 import { choosePlace, clearSearch, goToPoint, locateMe, recentPlaceIds } from '../state/actions';
 import { useStore } from '../state/store';
@@ -52,6 +53,7 @@ export function SearchBox() {
   const root = useRef<HTMLDivElement>(null);
   const listId = useId();
   const narrow = useNarrow();
+  const [remoteSearch, setRemoteSearch] = useState<{ query: string; results: PlaceResult[]; loading: boolean; error: string | null }>({ query: '', results: [], loading: false, error: null });
 
   // Reflect selections made elsewhere (URL restore, chat) in the field.
   useEffect(() => {
@@ -71,11 +73,34 @@ export function SearchBox() {
     return () => window.removeEventListener('pointerdown', onDown);
   }, []);
 
-  const outcome: SearchOutcome | null = useMemo(() => {
+  const localOutcome: SearchOutcome | null = useMemo(() => {
     if (!places.data || !debounced.trim()) return null;
     if (highlight && debounced === placeTitle(highlight.place)) return null;
     return searchPlaces(places.data, debounced);
   }, [places.data, debounced, highlight]);
+
+  useEffect(() => {
+    if (!API_BASE) return;
+    if (!debounced.trim() || debounced.trim().length < 2 ||
+      (highlight && debounced === placeTitle(highlight.place)) || localOutcome?.coordinates) {
+      setRemoteSearch({ query: '', results: [], loading: false, error: null });
+      return;
+    }
+    const ctrl = new AbortController();
+    setRemoteSearch({ query: debounced, results: [], loading: true, error: null });
+    void searchLocations(debounced, ctrl.signal).then(results => {
+      if (!ctrl.signal.aborted) setRemoteSearch({ query: debounced, results, loading: false, error: null });
+    }).catch((error: Error) => {
+      if (!ctrl.signal.aborted) setRemoteSearch({ query: debounced, results: [], loading: false, error: error.message });
+    });
+    return () => ctrl.abort();
+  }, [debounced, highlight, localOutcome?.coordinates]);
+
+  const outcome: SearchOutcome | null = useMemo(() => API_BASE && !localOutcome?.coordinates && debounced.trim()
+    ? { results: remoteSearch.query === debounced ? remoteSearch.results : [], coordinates: null, fuzzy: false,
+        notice: remoteSearch.loading || remoteSearch.error ? null : localOutcome?.notice ??
+          (remoteSearch.query === debounced && !remoteSearch.results.length ? { kind: 'none', message: `No California location matches “${debounced}”.` } : null) }
+    : localOutcome, [localOutcome, debounced, remoteSearch]);
 
   const options: Option[] = useMemo(() => {
     if (!query.trim() || (highlight && query === placeTitle(highlight.place))) {
@@ -85,7 +110,7 @@ export function SearchBox() {
       return [{ kind: 'locate' } as Option, ...recent.map((place) => ({ kind: 'place' as const, place, recent: true })), ...quick.map((place) => ({ kind: 'place' as const, place }))];
     }
     if (outcome?.coordinates) return [{ kind: 'coords', lngLat: outcome.coordinates }];
-    return (outcome?.results ?? []).map((place) => ({ kind: 'place' as const, place }));
+    return (query === debounced ? outcome?.results ?? [] : []).map((place) => ({ kind: 'place' as const, place }));
   }, [query, outcome, places.data, highlight]);
 
   useEffect(() => setActive(0), [options]);
@@ -129,7 +154,8 @@ export function SearchBox() {
   };
 
   const showEmptyState = !!query.trim() && !!outcome && !options.length;
-  const loading = open && places.state === 'loading';
+  const loading = open && (places.state === 'loading' || (!!API_BASE && (remoteSearch.loading || query !== debounced)));
+  const searchError = API_BASE ? remoteSearch.error : places.error;
 
   return (
     <div className="search" ref={root}>
@@ -163,14 +189,14 @@ export function SearchBox() {
           <X size={15} />
         </button>
       )}
-      {open && (loading || options.length > 0 || showEmptyState || outcome?.notice) && (
+      {open && (loading || searchError || options.length > 0 || showEmptyState || outcome?.notice) && (
         <div className="search__menu" role="presentation">
           {loading && (
             <div className="search__status">
               <Loader2 className="spin" size={15} /> Loading California places…
             </div>
           )}
-          {places.state === 'error' && <div className="search__status is-error">Place search is unavailable right now.</div>}
+          {searchError && <div className="search__status is-error" role="alert">Place search is unavailable. {searchError}</div>}
           {outcome?.notice && <div className={`search__notice search__notice--${outcome.notice.kind}`}>{outcome.notice.message}</div>}
           {outcome?.fuzzy && <div className="search__status">Showing close matches</div>}
           <ul id={listId} role="listbox" aria-label="Search suggestions">

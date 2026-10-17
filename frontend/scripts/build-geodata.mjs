@@ -51,7 +51,13 @@ async function ensureDownloaded() {
 async function run(commands) {
   const out = await mapshaper.applyCommands(commands);
   const [name] = Object.keys(out);
-  return JSON.parse(out[name]);
+  // Export rounding can introduce tiny ring intersections. Re-import the rounded
+  // geometry and repair topology, preserving overlaps between distinct records.
+  const clean = await mapshaper.applyCommands(
+    '-i rounded.geojson -clean allow-overlaps -o cleaned.geojson precision=0.00001',
+    { 'rounded.geojson': out[name] },
+  );
+  return JSON.parse(clean['cleaned.geojson']);
 }
 
 const slug = (s) =>
