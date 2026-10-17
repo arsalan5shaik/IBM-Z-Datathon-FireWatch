@@ -1,0 +1,92 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "data_mode": {
+      "enum": [
+        "fixture",
+        "live"
+      ],
+      "title": "Data Mode",
+      "type": "string"
+    },
+    "active_window_start": {
+      "format": "date-time",
+      "title": "Active Window Start",
+      "type": "string"
+    },
+    "active_window_end_exclusive": {
+      "format": "date-time",
+      "title": "Active Window End Exclusive",
+      "type": "string"
+    },
+    "grid_version": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.:-]+$",
+      "title": "Grid Version",
+      "type": "string"
+    },
+    "model_version": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.:-]+$",
+      "title": "Model Version",
+      "type": "string"
+    },
+    "feature_version": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.:-]+$",
+      "title": "Feature Version",
+      "type": "string"
+    },
+    "input_revision": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.:-]+$",
+      "title": "Input Revision",
+      "type": "string"
+    },
+    "hours": {
+      "items": {
+        "format": "date-time",
+        "type": "string"
+      },
+      "maxItems": 168,
+      "title": "Hours",
+      "type": "array"
+    },
+    "published_at": {
+      "format": "date-time",
+      "title": "Published At",
+      "type": "string"
+    },
+    "artifacts": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Artifacts",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "data_mode",
+    "active_window_start",
+    "active_window_end_exclusive",
+    "grid_version",
+    "model_version",
+    "feature_version",
+    "input_revision",
+    "hours",
+    "published_at"
+  ],
+  "title": "Manifest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

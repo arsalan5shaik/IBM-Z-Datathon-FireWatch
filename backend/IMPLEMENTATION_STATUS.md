@@ -1,8 +1,10 @@
 # Backend implementation status
 
-Updated: 2026-10-17. API foundation implemented, locally verified and CI verified
-at code commit `5f04918`; PR #1 is open. Merge authorization remains before the
-next feature.
+Updated: 2026-10-17. PR #1 merged as `72ceaa5`; remote main verified and post-merge
+smoke passed. The requester explicitly authorized autonomous work and merges under
+the existing check/review gates. Forecast contracts are implemented on
+`JS_feat/forecast-contracts`; current feature details below supersede the original
+foundation checkpoint retained for history.
 
 ## Repository inventory and prerequisites
 
@@ -133,6 +135,38 @@ Starlette warning that HTTPX TestClient compatibility is deprecated; it is not
 suppressed. No provider network requests or skipped tests.
 
 ## Current milestone
+
+### Feature 2: forecast contracts
+
+- Foundation: PR #1 merged, main synchronized, post-merge smoke passed. Autonomous
+  authorization now established by the requester's explicit instruction.
+- Branch: `JS_feat/forecast-contracts`, based on remote main `72ceaa5`.
+- A concurrent checkout changed the shared working tree to main after branch
+  creation. Own commit `78d6cf1` landed on local main only; remote main was never
+  pushed. Preserved the commit unchanged by fast-forwarding the feature branch in
+  an isolated worktree and confirmed its remote push. No reset/discard/force push.
+  Work now runs in the dedicated `firewatch-backend-worktree` under the OS temp
+  directory to avoid branch switches from other sessions. Use a normal merge for
+  this feature so local main's preserved commit remains an ancestor of remote main.
+- Implemented: strict hourly/manifest contracts, JSON schemas and labeled samples,
+  geometry validation and bucket spatial index, bounded hourly cache, bbox risk
+  GeoJSON and 168-slot cell history, UTC/California DST and partial-day semantics.
+- Tests: 95 pytest tests passed, Ruff lint passed; formatting and both process
+  smoke variants rerun before PR. Mock provider transports only; no live inference.
+- Scale smoke: 47,000 synthetic index polygons, 12-cell query, build 8.765 s with
+  tracemalloc enabled, peak Python allocation 63.64 MB, p50/p95 lookup 0.798/0.849 ms.
+  This is a Windows index microbenchmark, not full API latency, a real CA land grid,
+  or LinuxONE evidence. Fixture sample cells were generated as exact 3,000 m squares
+  in EPSG:3310 using temporary developer-only pyproj; no runtime geospatial package.
+- Contract additions are explicitly proposed in shared/README.md and the PR:
+  data_mode on all artifacts, feature_version on manifest, optional immutable
+  artifact references. No existing shared contract or frontend/ML code changed.
+- Real ML artifacts and authoritative grid/CA boundary still absent; APIs fail
+  closed with 503. Fixtures require explicit opt-in and always retain fixture labels.
+- PR/CI/merge: pending final feature handoff; do not start rolling-window until
+  green CI, normal merge, remote-main verification and post-merge smoke.
+
+### Historical foundation checkpoint
 
 - Feature: API foundation implemented; awaiting remote verification and merge gate.
 - Branch: `JS_feat/api-foundation`, based on synchronized main `658dee1`.

@@ -49,3 +49,5 @@ jobs:
         run: uv run --no-sync python -m ruff format --check .
       - name: Process startup and HTTP smoke
         run: uv run --no-sync python scripts/smoke.py
+      - name: Fixture forecast HTTP smoke
+        run: uv run --no-sync python scripts/smoke.py --fixtures

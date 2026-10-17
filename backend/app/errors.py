@@ -17,6 +17,15 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 logger = logging.getLogger("firewatch.requests")
 
 
+class APIError(Exception):
+    def __init__(self, code: str, message: str, status: int = 503, details: dict | None = None):
+        self.code, self.message, self.status, self.details = code, message, status, details
+
+
+async def api_error(request: Request, exc: APIError):
+    return error_response(exc.code, exc.message, exc.status, exc.details)
+
+
 class RestrictedCORSMiddleware(CORSMiddleware):
     def preflight_response(self, request_headers: Headers):
         response = super().preflight_response(request_headers)

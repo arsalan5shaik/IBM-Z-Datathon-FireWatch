@@ -1,0 +1,127 @@
+{
+  "$defs": {
+    "Prediction": {
+      "additionalProperties": false,
+      "properties": {
+        "cell_id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Cell Id",
+          "type": "string"
+        },
+        "risk_score": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Risk Score",
+          "type": "number"
+        }
+      },
+      "required": [
+        "cell_id",
+        "risk_score"
+      ],
+      "title": "Prediction",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "data_mode": {
+      "enum": [
+        "fixture",
+        "live"
+      ],
+      "title": "Data Mode",
+      "type": "string"
+    },
+    "forecast_hour": {
+      "format": "date-time",
+      "title": "Forecast Hour",
+      "type": "string"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "model_version": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.:-]+$",
+      "title": "Model Version",
+      "type": "string"
+    },
+    "feature_version": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.:-]+$",
+      "title": "Feature Version",
+      "type": "string"
+    },
+    "input_revision": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.:-]+$",
+      "title": "Input Revision",
+      "type": "string"
+    },
+    "grid_version": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.:-]+$",
+      "title": "Grid Version",
+      "type": "string"
+    },
+    "grid_resolution_m": {
+      "const": 3000,
+      "title": "Grid Resolution M",
+      "type": "integer"
+    },
+    "score_type": {
+      "enum": [
+        "relative_risk",
+        "calibrated_probability"
+      ],
+      "title": "Score Type",
+      "type": "string"
+    },
+    "target_type": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.:-]+$",
+      "title": "Target Type",
+      "type": "string"
+    },
+    "predictions": {
+      "items": {
+        "$ref": "#/$defs/Prediction"
+      },
+      "maxItems": 100000,
+      "title": "Predictions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "data_mode",
+    "forecast_hour",
+    "generated_at",
+    "model_version",
+    "feature_version",
+    "input_revision",
+    "grid_version",
+    "grid_resolution_m",
+    "score_type",
+    "target_type",
+    "predictions"
+  ],
+  "title": "HourArtifact",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

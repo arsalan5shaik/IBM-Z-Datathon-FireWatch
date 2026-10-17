@@ -1,8 +1,8 @@
 # FireWatch backend
 
 API foundation for the primary `FireWatch_Backend_Architecture.md` specification.
-Only status and health routes are implemented in this feature. There are no
-forecasts, observations, explanations, provider calls or ML inference yet.
+Status, health and validated JSON forecast read routes are implemented. No real
+ML artifacts have been provided. There are no provider calls or inference on GET.
 
 ## Setup and startup
 
@@ -45,10 +45,12 @@ strings, client request IDs, raw exception messages and credentials.
 | `GET /health/live` | HTTP 200 while the process can answer HTTP |
 | `GET /health/ready` | HTTP 200 after API lifespan initialization; HTTP 503 before initialization or during teardown |
 | `GET /openapi.json`, `/docs` | Generated response/error schemas and interactive documentation |
+| `GET /api/v1/forecasts/risk?hour=...&bbox=w,s,e,n` | Filtered grid GeoJSON; use exactly one hour or California date, optional max_hourly_risk/mean_hourly_risk aggregation |
+| `GET /api/v1/forecasts/cell/{cell_id}?start=...&end=...` | Up to 168 hourly values; end exclusive, missing cells/hours explicit |
 
 **Readiness measures API initialization, not forecast availability.** A missing
 forecast must not remove a functioning diagnostic API from service. Consumers must
-check `/api/v1/status` for data availability. Future forecast routes will return
+check `/api/v1/status` for data availability. Forecast routes return
 `503 forecast_not_ready` until validated data exists, or explicitly labeled stale
 last-known-good data. Unknown/unimplemented paths currently return structured 404.
 Provider keys do not change availability. No GET or startup invokes a provider,
