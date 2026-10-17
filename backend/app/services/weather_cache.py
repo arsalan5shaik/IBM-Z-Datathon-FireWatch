@@ -8,7 +8,7 @@ from collections import OrderedDict
 from datetime import UTC, datetime, timedelta
 
 from app.errors import APIError
-from app.persistence.atomic import atomic_json
+from app.persistence.atomic import JobLocked, atomic_json, single_owner
 from app.schemas.forecast import Contract
 from app.schemas.weather import WeatherForecast, WeatherPoint
 from app.services.jsonio import read_json
@@ -59,19 +59,30 @@ class WeatherCache:
         self.last_error = None
         self.retry_at = None
         self.changed_partitions = []
+        self.file_stamp = None
+        self.reload()
+
+    def reload(self):
         if self.path.exists():
             try:
+                stamp = (self.path.stat().st_mtime_ns, self.path.stat().st_size)
+                if stamp == self.file_stamp:
+                    return
                 document = read_json(self.path)
                 if (
                     document["schema_version"] != "1.0"
-                    or len(document["entries"]) > settings.weather_max_anchors
+                    or len(document["entries"]) > self.settings.weather_max_anchors
                 ):
                     raise ValueError("Invalid weather cache")
+                loaded = OrderedDict()
                 for value in document["entries"]:
                     entry = Entry.model_validate(value)
-                    self.entries[entry.point.anchor_id] = entry
+                    loaded[entry.point.anchor_id] = entry
+                if len(loaded) != len(document["entries"]):
+                    raise ValueError("Duplicate cache anchors")
+                self.entries, self.file_stamp = loaded, stamp
+                self.last_error = self.retry_at = None
             except (OSError, ValueError, KeyError, TypeError):
-                self.entries.clear()
                 self.last_error = "weather_cache_invalid"
 
     def state(self, entry, now=None):
@@ -86,6 +97,7 @@ class WeatherCache:
         if len({p.anchor_id for p in points}) != len(points):
             raise ValueError("Duplicate sampling points")
         async with self.lock:
+            self.reload()
             now = self.clock()
             needed = []
             for point in points:
@@ -97,7 +109,18 @@ class WeatherCache:
                 if not entry or self.state(entry, now) != "fresh":
                     needed.append(point)
             if needed and (self.retry_at is None or now >= self.retry_at):
+                owner = single_owner(self.path.with_suffix(".lock"))
+                acquired = False
                 try:
+                    owner.__enter__()
+                    acquired = True
+                    self.reload()
+                    needed = [
+                        p
+                        for p in points
+                        if p.anchor_id not in self.entries
+                        or self.state(self.entries[p.anchor_id], now) != "fresh"
+                    ]
                     candidates = []
                     # Bounded batches and two in-flight HTTP requests at most.
                     size = self.settings.weather_batch_size
@@ -134,19 +157,35 @@ class WeatherCache:
                     for candidate in candidates:
                         updated[candidate.point.anchor_id] = candidate
                         updated.move_to_end(candidate.point.anchor_id)
+                    for point in points:
+                        if point.anchor_id in updated:
+                            updated.move_to_end(point.anchor_id)
                     while len(updated) > self.settings.weather_max_anchors:
                         updated.popitem(last=False)
                     document = {
                         "schema_version": "1.0",
                         "entries": [e.model_dump(mode="json") for e in updated.values()],
                     }
-                    await asyncio.to_thread(atomic_json, self.path, document)
+                    if len(json.dumps(document).encode()) > 32_000_000:
+                        raise ValueError("Weather cache exceeds storage budget")
+                    publication = asyncio.create_task(
+                        asyncio.to_thread(atomic_json, self.path, document)
+                    )
+                    try:
+                        await asyncio.shield(publication)
+                    except asyncio.CancelledError:
+                        await publication  # Keep the process lock until publication finishes.
+                        raise
                     self.entries = updated
+                    self.file_stamp = (self.path.stat().st_mtime_ns, self.path.stat().st_size)
                     self.changed_partitions = changed
                     self.last_error = self.retry_at = None
-                except (APIError, OSError, ValueError, TimeoutError):
+                except (APIError, OSError, ValueError, TimeoutError, JobLocked):
                     self.last_error = "weather_refresh_failed"
                     self.retry_at = now + timedelta(minutes=1)
+                finally:
+                    if acquired:
+                        owner.__exit__(None, None, None)
             result = []
             for point in points:
                 entry = self.entries.get(point.anchor_id)

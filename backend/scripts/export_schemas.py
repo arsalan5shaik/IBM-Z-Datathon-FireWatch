@@ -4,11 +4,17 @@ import json
 from pathlib import Path
 
 from app.schemas.forecast import HourArtifact, Manifest
+from app.services.weather_inputs import ProposedWeatherInputs, WeatherSampling
 
 if __name__ == "__main__":
     root = Path(__file__).resolve().parents[2] / "shared/schemas"
     root.mkdir(parents=True, exist_ok=True)
-    for name, model in (("forecast-hour.v1", HourArtifact), ("forecast-manifest.v1", Manifest)):
+    for name, model in (
+        ("forecast-hour.v1", HourArtifact),
+        ("forecast-manifest.v1", Manifest),
+        ("weather-inputs.proposed", ProposedWeatherInputs),
+        ("weather-sampling.proposed", WeatherSampling),
+    ):
         schema = model.model_json_schema() | {
             "$schema": "https://json-schema.org/draft/2020-12/schema"
         }

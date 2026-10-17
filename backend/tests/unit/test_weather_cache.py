@@ -5,6 +5,7 @@ import pytest
 
 from app.config import Settings
 from app.errors import APIError
+from app.persistence.atomic import single_owner
 from app.services.weather_cache import WeatherCache, display_points, hour_revision, sample_point
 from app.services.weather_provider import normalize
 from tests.unit.test_weather_provider import NOW, response
@@ -84,3 +85,20 @@ def test_sampling_bounds_and_shared_anchors():
     points = display_points((-124.5, 32.5, -114, 42))
     assert len(points) <= 512 and len({p.anchor_id for p in points}) == len(points)
     assert all(-124.5 <= p.longitude <= -114 for p in points)
+
+
+def test_process_lock_preserves_stale_cache_without_duplicate_refresh(tmp_path):
+    provider = MockProvider()
+    clock = [NOW]
+    settings = Settings(_env_file=None, repo_root=tmp_path)
+    cache = WeatherCache(provider, settings, lambda: clock[0])
+    point = sample_point(36.5, -120)
+
+    async def run():
+        await cache.get([point])
+        clock[0] += timedelta(hours=1)
+        with single_owner(cache.path.with_suffix(".lock")):
+            assert (await cache.get([point]))[0][1] == "stale"
+        assert provider.calls == 1
+
+    asyncio.run(run())
