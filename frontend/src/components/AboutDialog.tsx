@@ -6,6 +6,7 @@ import { SHORTCUTS } from '../state/keyboard';
 import { setState, useStore, type Dataset } from '../state/store';
 import { formatStamp, parseTime, relativeTime } from '../lib/time';
 import { FlameLogo } from './TopBar';
+import { HotspotStatus } from './HotspotStatus';
 
 function Row({ name, ds, source, at, label }: { name: string; ds: Dataset<unknown>; source?: string; at?: string | null; label?: string }) {
   const now = useStore((s) => s.now);
@@ -70,7 +71,7 @@ export function AboutDialog() {
               <b>Hotspots</b> are NASA FIRMS satellite heat detections (VIIRS). They are not confirmed fire perimeters; size shows fire radiative power.
             </li>
             <li>
-              <b>Risk</b> (orange → red → purple) is a machine-learning score for hotspot occurrence in each grid cell for the selected hour. It is not a
+              <b>Risk</b> is an experimental score for each grid cell and hour when validated model output is available. Sample-mode colors are illustrative; real-data categories await ML agreement. It is not a
               fire-spread prediction or an official warning.
             </li>
             <li>
@@ -80,6 +81,7 @@ export function AboutDialog() {
           </ul>
 
           <h3>Data status</h3>
+          <HotspotStatus />
           <div className="table-wrap">
             <table className="data-table">
               <thead>
@@ -91,7 +93,7 @@ export function AboutDialog() {
                 </tr>
               </thead>
               <tbody>
-                <Row name="Satellite hotspots" ds={fires} source={fires.data?.metadata.source} at={fires.data?.metadata.generated_at} />
+                <Row name="Satellite hotspots" ds={fires} source={fires.data?.metadata.source} at={fires.data?.metadata.generated_at} label={fires.data?.metadata.stale ? 'Stale cached observations' : undefined} />
                 <Row name="Risk forecast" ds={risk} source={risk.data ? `${risk.data.metadata.source} · ${risk.data.metadata.model_version}` : undefined} at={risk.data?.metadata.generated_at} />
                 <Row name="Weather & wind" ds={weather} source={weather.data?.metadata.source} at={weather.data?.metadata.generated_at} />
                 <Row name="Incidents & perimeters" ds={incidents} source={incidents.data?.metadata.source} at={incidents.data?.metadata.generated_at} />

@@ -4,8 +4,8 @@
  * Data source selection:
  *   - VITE_API_BASE_URL (build time) or ?api=<url> (run time) → use the FireWatch backend (/api/v1 contract).
  *   - Neither set, or ?demo=1 → offline SAMPLE DATA generated in the browser (clearly labelled in the UI).
- * When the backend is configured but a dataset request fails, that dataset falls back to sample data
- * and the UI says so.
+ * Configured API observations and model predictions remain explicitly unavailable on failure;
+ * successful previous data can be retained with stale labels.
  */
 import type { RiskLevelKey } from './types';
 
@@ -41,7 +41,7 @@ export const TERRAIN_ATTRIBUTION =
   '<a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener">Terrain Tiles (Mapzen/AWS)</a>';
 export const BASEMAP_STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 
-/** Thresholds are configurable so they can match models/metrics.json from the ML team. */
+/** Illustrative SAMPLE categories only; real model thresholds are not finalized. */
 export const RISK_LEVELS: { key: RiskLevelKey; label: string; min: number; color: string }[] = [
   { key: 'low', label: 'Low', min: 0, color: '#CBD5E1' },
   { key: 'elevated', label: 'Elevated', min: 0.2, color: '#FFAA33' },
@@ -141,3 +141,7 @@ export const WEATHER_CITIES: { name: string; lon: number; lat: number; rank: num
 ];
 
 export const QUICK_PLACES = ['place-ca-sacramento', 'place-ca-los-angeles', 'place-ca-fresno', 'place-ca-stockton', 'county-ca-butte'];
+
+
+/** Continuous display endpoints, not category thresholds. Backend scores are normalized 0–1. */
+export const MODEL_SCORE_COLORS = ['#fff5e6', '#7a1c8c'] as const;

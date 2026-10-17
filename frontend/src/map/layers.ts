@@ -1,5 +1,5 @@
 import type { ExpressionSpecification, GeoJSONSourceSpecification, Map as MapLibreMap } from 'maplibre-gl';
-import { FUEL_CLASSES, HOTSPOT_AGE_COLORS, RISK_RAMP, WIND_RAMP } from '../config';
+import { API_BASE, MODEL_SCORE_COLORS, FUEL_CLASSES, HOTSPOT_AGE_COLORS, RISK_RAMP, WIND_RAMP } from '../config';
 import type { LayerKey } from '../types';
 import { FONTS } from './style';
 
@@ -33,14 +33,15 @@ const S: ExpressionSpecification = ['coalesce', ['feature-state', 's'], -1];
 const ramp = (stops: [number, string][], input: ExpressionSpecification): ExpressionSpecification =>
   ['interpolate', ['linear'], input, ...stops.flat()] as ExpressionSpecification;
 
-export const riskColor = (): ExpressionSpecification => ramp(RISK_RAMP, S);
+export const riskColor = (): ExpressionSpecification => API_BASE ? ['interpolate', ['linear'], S, 0, MODEL_SCORE_COLORS[0], 1, MODEL_SCORE_COLORS[1]] : ramp(RISK_RAMP, S);
 
 export function riskFillOpacity(f: number): ExpressionSpecification {
+  if (API_BASE) return ['case', ['>=', S, 0], 0.4 * f, 0];
   const at = (k: number): ExpressionSpecification =>
     ['interpolate', ['linear'], S, 0.1999, 0, 0.2, 0.3 * k * f, 0.4, 0.44 * k * f, 0.6, 0.54 * k * f, 0.8, 0.62 * k * f, 1, 0.68 * k * f];
   return ['interpolate', ['linear'], ['zoom'], 5, at(1), 10, at(0.9), 13, at(0.72)];
 }
-export const riskGlowOpacity = (f: number): ExpressionSpecification => ['interpolate', ['linear'], S, 0.55, 0, 0.7, 0.28 * f, 1, 0.45 * f];
+export const riskGlowOpacity = (f: number): ExpressionSpecification => API_BASE ? ['literal', 0] : ['interpolate', ['linear'], S, 0.55, 0, 0.7, 0.28 * f, 1, 0.45 * f];
 
 const empty = (): GeoJSON.FeatureCollection => ({ type: 'FeatureCollection', features: [] });
 const geojson = (extra: Partial<GeoJSONSourceSpecification> = {}): GeoJSONSourceSpecification => ({ type: 'geojson', data: empty(), ...extra });

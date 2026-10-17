@@ -3,7 +3,7 @@
  * backend chat fails. It only reports numbers that exist in the loaded datasets, says "not
  * available" otherwise, and never gives evacuation advice.
  */
-import { FUEL_CLASSES, OFFICIAL_LINKS } from '../config';
+import { API_BASE, FUEL_CLASSES, OFFICIAL_LINKS } from '../config';
 import { loadBoundary } from '../api/static';
 import { getExplanation } from '../state/data';
 import { cellIndexAt, cellsForPlace, describePoint, groupsNear, seriesForCells, statewideShare, summarizeCells, weatherAtPoint } from '../state/lookups';
@@ -172,9 +172,13 @@ export async function answerOffline(message: string, s: AppState, ctx: ChatConte
   if (/^(hi|hello|hey)\b|what can you|help me|^help\b/.test(q)) {
     return reply(
       `I answer questions using FireWatch’s loaded data — satellite hotspots, the hourly 7-day risk forecast, weather and the model’s explanation factors. Try:\n\n` +
-        bullet(['Why is Stockton high risk on Day 4?', 'What live fires are near Sacramento?', 'How is wind affecting this area?', 'When is the peak risk this week?']),
+        bullet(API_BASE ? ['What satellite hotspots are near Sacramento?', 'What forecast data is available?', 'What does a risk score mean?'] : ['Why is Stockton high risk on Day 4?', 'What live fires are near Sacramento?', 'How is wind affecting this area?', 'When is the peak risk this week?']),
     );
   }
+
+  if (API_BASE && !grid && /risk|forecast|predict|shap|explain|model/.test(q)) return reply('Validated model predictions and explanations are not available yet; risk categories are pending ML confirmation.');
+  if (API_BASE && /calibrat|probabilit|what.*score|score.*mean|(how|what).*(model|forecast).*(work|mean|calculated|accurate|reliable)/.test(q)) return reply('Forecast values are modeled wildfire occurrence-risk scores out of 100, not fire intensity or severity. Probability calibration is unverified and category thresholds are pending ML. No probability interpretation is supported.');
+  if (API_BASE && /shap/.test(q)) return reply('SHAP explanations must come from the model endpoint with its declared output scale. I cannot infer contributions or their scale from satellite observations.');
 
   // 2. Glossary / model questions.
   if (/\b(shap|log.?odds|contribution)s?\b/.test(q) && /what|how|mean/.test(q)) {
@@ -202,6 +206,10 @@ export async function answerOffline(message: string, s: AppState, ctx: ChatConte
         `Perimeters: ${s.incidents.data?.metadata.source ?? 'not loaded'}`,
       ]),
     );
+  }
+
+  if (API_BASE && !s.fires.data && /hotspots?|detections?|fires? near|active fires?|burning/.test(q)) {
+    return reply('Satellite observation data is unavailable. That does not mean no hotspots or fires are present. Retry the data source before interpreting activity.');
   }
 
   // 3. Out-of-state places.
@@ -250,7 +258,7 @@ export async function answerOffline(message: string, s: AppState, ctx: ChatConte
       const top = [...byCounty.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
       const share = statewideShare(grid)[f];
       parts.push(
-        `For **${when(t)}**, ${formatPct(share * 100)} of California’s forecast cells are at High risk or above. Highest-scoring counties:\n` +
+        (API_BASE ? `Highest-scoring loaded counties for **${when(t)}** (category thresholds pending ML):\n` : `For **${when(t)}**, ${formatPct(share * 100)} of California’s forecast cells are at High risk or above. Highest-scoring counties:\n`) +
           bullet(top.map(([c, v]) => `${c} County — ${riskLabel(riskLevelKey(v))} (${scoreValue(v, md?.score_type)})`)),
       );
       if (wantsPeak) {
@@ -293,7 +301,7 @@ export async function answerOffline(message: string, s: AppState, ctx: ChatConte
     const area = loc.cellIndexes.length > 1 ? ` (highest of ${loc.cellIndexes.length} forecast cells in the area)` : '';
     const claimed = q.match(/\b(extreme|very high|high)\s+(fire\s+)?risk/)?.[1];
     const order = ['low', 'elevated', 'high', 'very high', 'extreme'];
-    const premiseWrong = claimed && order.indexOf(level.toLowerCase()) < order.indexOf(claimed);
+    const premiseWrong = !API_BASE && claimed && order.indexOf(level.toLowerCase()) < order.indexOf(claimed);
     parts.push(
       `${premiseWrong ? `Actually, ${loc.label} isn’t forecast to be ${claimed} risk then. ` : ''}For **${loc.label}** at **${when(t)}**, forecast wildfire risk is **${level}** — score ${scoreValue(summary.max, md?.score_type)}${area}.`,
     );
@@ -302,15 +310,20 @@ export async function answerOffline(message: string, s: AppState, ctx: ChatConte
       const hours = Array.from({ length: tl.frames - tl.liveIndex }, (_, i) => tl.start + (tl.liveIndex + i) * HOUR_MS);
       const vals = seriesForCells(grid, loc.cellIndexes, hours);
       const lowest = /safest|lowest/.test(q);
-      const k = vals.reduce((bi, v, i) => ((lowest ? v < vals[bi] : v > vals[bi]) ? i : bi), 0);
+      const available = vals.map((v, i) => ({ v, i })).filter(({ v }) => Number.isFinite(v));
+      const peak = available.reduce<(typeof available)[number] | null>((best, entry) => !best || (lowest ? entry.v < best.v : entry.v > best.v) ? entry : best, null);
       const days = daySegments(tl.start, HOUR_MS, tl.frames)
         .filter((d) => d.endIndex >= tl.liveIndex)
         .map((d) => {
-          let m = 0;
-          for (let i = Math.max(d.startIndex, tl.liveIndex); i <= d.endIndex; i++) m = Math.max(m, vals[i - tl.liveIndex]);
+          let m = NaN;
+          for (let i = Math.max(d.startIndex, tl.liveIndex); i <= d.endIndex; i++) {
+            const value = vals[i - tl.liveIndex];
+            if (Number.isFinite(value)) m = Number.isFinite(m) ? Math.max(m, value) : value;
+          }
+          if (!Number.isFinite(m)) return `${formatWeekday(d.startMs)} ${formatMonthDay(d.startMs)}: Unavailable`;
           return `${formatWeekday(d.startMs)} ${formatMonthDay(d.startMs)}: ${riskLabel(riskLevelKey(m))} (${scoreValue(m, md?.score_type)})`;
         });
-      parts.push(`The ${lowest ? 'lowest' : 'highest'} forecast hour this week is **${when(hours[k])}** (${scoreValue(vals[k], md?.score_type)}). Daily peaks:\n${bullet(days)}`);
+      if (peak) parts.push(`The ${lowest ? 'lowest' : 'highest'} forecast hour among received values is **${when(hours[peak.i])}** (${scoreValue(peak.v, md?.score_type)}). Daily peaks from received values:\n${bullet(days)}`);
     }
   } else if (!summary && (generic || wantsWhy)) {
     parts.push(`I don’t have a forecast cell for ${loc.label}${grid ? '' : ' — the risk forecast isn’t loaded'}.`);

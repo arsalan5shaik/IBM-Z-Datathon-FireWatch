@@ -1,3 +1,4 @@
+import { API_BASE } from '../../config';
 import { useEffect, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Building2, Crosshair, Hash, Home, Map as MapIcon, Radar, Sparkles, X } from 'lucide-react';
@@ -34,7 +35,7 @@ function RiskHeadline({ score, scoreType, t, extra }: { score: number; scoreType
     );
   const key = riskLevelKey(score);
   return (
-    <div className={`risk-card risk-card--${key}`} style={{ ['--c' as string]: riskColor(Math.max(0.2, score)) }}>
+    <div className={`risk-card risk-card--${key}`} style={{ ['--c' as string]: riskColor(API_BASE ? score : Math.max(0.2, score)) }}>
       <div className="risk-card__main">
         <span className="risk-card__level">{riskLabel(key)}</span>
         <span className="risk-card__score">
@@ -90,7 +91,7 @@ export function CellPanel({ cellId, lngLat }: { cellId: string; lngLat: LngLat }
   if (!grid || !cell)
     return (
       <PanelShell icon={<Radar size={18} />} title="Forecast area">
-        <Note>{grid ? 'This forecast cell is not in the current forecast.' : 'The risk forecast is still loading…'}</Note>
+        <Note>{grid ? 'This forecast cell is not in the current forecast.' : API_BASE ? 'Validated model forecast unavailable; awaiting ML artifacts.' : 'The sample forecast is loading…'}</Note>
       </PanelShell>
     );
 
@@ -207,7 +208,7 @@ export function PlacePanel({ place }: { place: PlaceResult }) {
       }
       footer={<ModelFoot cellId={maxCellId} />}
     >
-      {!grid && <Note>The risk forecast is still loading…</Note>}
+      {!grid && <Note>{API_BASE ? 'Validated model forecast unavailable; awaiting ML artifacts.' : 'The sample forecast is loading…'}</Note>}
       {grid && !summary && <Note>No forecast cells cover this place.</Note>}
       {summary && (
         <>
@@ -215,7 +216,7 @@ export function PlacePanel({ place }: { place: PlaceResult }) {
             score={summary.max}
             scoreType={grid!.metadata.score_type}
             t={t}
-            extra={summary.count > 1 ? `highest of ${summary.count} cells, ${formatPct(summary.shadedShare * 100)} of area Elevated+` : undefined}
+            extra={summary.count > 1 ? API_BASE ? `highest of ${summary.count} cells; categories pending ML` : `highest of ${summary.count} cells, ${formatPct(summary.shadedShare * 100)} of area Elevated+` : undefined}
           />
           <RiskSparkline
             title={summary.count > 1 ? 'Highest risk in this area, next 7 days' : 'Risk over the next 7 days (hourly)'}

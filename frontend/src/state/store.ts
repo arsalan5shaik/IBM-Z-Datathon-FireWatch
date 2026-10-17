@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { API_BASE } from '../config';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type { Feature, MultiPolygon, Polygon } from 'geojson';
 import { loadJson, saveJson } from '../lib/storage';
@@ -219,6 +220,11 @@ export function setTimeIndex(i: number, { keepPlaying = false } = {}) {
   const s = getState();
   const tl = timelineOf(s);
   const idx = Math.max(tl.liveIndex, Math.min(tl.frames - 1, Math.round(i)));
+  if (API_BASE && (!s.risk.data || (s.risk.data.metadata.available_hours && !s.risk.data.metadata.available_hours.some((hour) => Date.parse(hour) === tl.start + idx * HOUR_MS)))) {
+    setState({ playing: false });
+    toast('No validated model prediction is published for this hour.');
+    return;
+  }
   setState({ timeIndex: idx, isLive: idx === tl.liveIndex, playing: keepPlaying ? s.playing : false });
 }
 export const stepTime = (deltaHours: number) => {
@@ -228,7 +234,7 @@ export const stepTime = (deltaHours: number) => {
 export const goLive = () => setState({ isLive: true, playing: false, timeIndex: timelineOf(getState()).liveIndex });
 export function togglePlay() {
   const s = getState();
-  if (s.playing) return setState({ playing: false });
+  if (s.playing || (API_BASE && !s.risk.data)) return setState({ playing: false });
   const tl = timelineOf(s);
   const at = effectiveIndex(s, tl);
   setState({ playing: true, isLive: false, timeIndex: at >= tl.frames - 1 ? tl.liveIndex : at });

@@ -2657,3 +2657,15 @@ code {
 .chat-source-kind { font-weight: 600; }
 .msg__limitations { font-size: 11px; }
 .msg__bubble { overflow-wrap: anywhere; }
+
+
+/* Cache provenance stays next to the existing observation legend and data dialog. */
+.hotspot-status { display: grid; gap: 5px; margin-top: 9px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.hotspot-status strong { font-weight: 650; }
+.hotspot-status--warning { color: #92400e; }
+.hotspot-status .link { justify-self: start; font-size: inherit; }
+
+.legend:not(.legend--pill) { max-height: calc(100dvh - 210px); overflow-y: auto; }
+.timeline--unavailable { padding: 10px 14px; }
+.timeline--unavailable strong { font-size: 13px; }
+.timeline--unavailable p { margin: 4px 0 0; font-size: 11px; }

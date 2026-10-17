@@ -10,22 +10,26 @@ AI assistant. Vite + React + TypeScript + MapLibre GL JS (one map instance for 2
 
 ```bash
 cd frontend
-npm ci
-npm run dev            # http://localhost:5173 — runs on built-in SAMPLE data
-npm test               # unit tests (vitest)
-npm run build          # type-check + production build → dist/
+npm.cmd ci
+npm.cmd run dev        # http://localhost:5173 — runs on built-in SAMPLE data
+npm.cmd test           # unit tests (vitest)
+npm.cmd run build      # type-check + production build → dist/
 ```
 
 Node 20+ (CI uses 24). No API keys are needed: the basemap (OpenFreeMap), terrain (AWS Terrain Tiles)
 and boundaries (US Census, bundled) are all keyless.
+
+For the real FastAPI connection on Windows, use the two-terminal instructions in
+[API_INTEGRATION.md](API_INTEGRATION.md). The local integration preview uses port 5174.
+Validated ML artifacts are pending; API forecast unavailability is shown explicitly.
 
 ## Data modes
 
 | Mode | How | What you see |
 |---|---|---|
 | **Sample** (default) | no configuration, or `?demo=1` | Everything generated in the browser relative to the current hour; badge **SAMPLE DATA** |
-| **Backend** | build with `VITE_API_BASE_URL=/api/v1`, or open `?api=https://host/api/v1` | Data from the FireWatch API; badge **Live** |
-| **Fallback** | backend configured but a route fails or isn't built yet | Only that layer uses sample data; badge **Live + sample layers** (or **API offline · Sample**) + retry banner |
+| **Backend** | build with `VITE_API_BASE_URL=/api/v1`, or open `?api=https://host/api/v1` | Data from the FireWatch API; badge **API** / actual availability |
+| **Unavailable API data** | backend configured but observations or forecasts fail | Explicit unavailable state; a failed refresh retains labeled stale last-good data. No synthetic replacements. |
 
 The client follows the backend routes in `FireWatch_Backend_Architecture.md` §7 (`/forecasts/risk` bbox+hour tiles,
 `/forecasts/cell`, `/fires/live`, `/wind`, `/explain`, `/chat`). Endpoints, fields, fallbacks and open items are in
@@ -52,7 +56,7 @@ Proxy a real backend during development: `FIREWATCH_API_PROXY=http://localhost:8
 - **Hourly timeline** — Live + 168 forecast hours, day labels in California time, play/pause (1×/2×/4×),
   ±1 h / ±1 day, calendar jump (incl. statewide peak), risk-trend sparkline (statewide or selected area),
   valid-time vs model-run vs data-update times.
-- **Map** — orange → red → purple risk cells (purple highest) with glow, flame markers for hotspot clusters,
+- **Map** — continuous score colors for API risk (sample mode retains its demonstration categories), flame markers for hotspot clusters,
   FRP-sized / age-coloured detections, official perimeters (solid) vs illustrative hotspot influence
   (dashed), wind arrows (denser when zoomed in), weather labels, fuel types, California mask, search outline.
 - **Details panel** (on click only; bottom sheet on phones) — forecast cell, place, hotspot, incident or
@@ -78,7 +82,7 @@ mock-api/     dev-only Vite middleware that speaks the backend contract
 scripts/      data builders
 ```
 
-Risk thresholds/colours: `src/config.ts` (`RISK_LEVELS`, `RISK_RAMP`) — keep in sync with the ML metrics.
+Sample-only categories: `src/config.ts` (`RISK_LEVELS`, `RISK_RAMP`). Real API scores use a continuous 0–100 display; ML category thresholds are pending.
 
 ## Regenerating static data
 
@@ -92,12 +96,11 @@ scaffolding only — production geometry comes from the ML grid via the API.
 
 ## Deploying
 
-- **GitHub Pages:** `.github/workflows/frontend-pages.yml` builds, tests and deploys on pushes to `AS_feat`/`main`.
+- **GitHub Pages:** `.github/workflows/frontend-pages.yml` builds, tests and deploys on pushes to `main`; its optional `VITE_API_BASE_URL` repository variable selects a deployed backend.
 - **With the Python backend:** `npm run build` and serve `frontend/dist/` as static files on the same origin as
   `/api/v1` (the build uses relative asset paths). Build with `VITE_API_BASE_URL=/api/v1` to make it the default.
 
 ## Honesty rules the UI enforces
 
-Hotspots ≠ perimeters; FRP ≠ fire size or risk; risk is an experimental relative score unless the API says
-`calibrated_probability`; illustrative influence shapes are never reported as burned area; missing values show
+Hotspots ≠ perimeters; FRP ≠ fire size or risk; risk is a modeled occurrence-risk score out of 100, with calibration unverified; illustrative influence shapes are never reported as burned area; missing values show
 “Unavailable”; sample data is always labelled; no evacuation advice — links to official sources instead.
