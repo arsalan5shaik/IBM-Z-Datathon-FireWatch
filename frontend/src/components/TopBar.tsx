@@ -28,6 +28,7 @@ export function FlameLogo({ size = 26 }: { size?: number }) {
 
 function WeatherChip() {
   const grid = useStore((s) => s.weather.data);
+  const weatherState = useStore((s) => s.weather);
   const center = useStore((s) => s.map.center);
   const t = useStore(validTimeOf);
   const units = useStore((s) => s.units);
@@ -38,7 +39,7 @@ function WeatherChip() {
   return (
     <span
       className="weather-chip"
-      title={`Forecast near the map center · ${formatWeekday(t)} ${formatHour(t)}: ${formatTemp(w.temperature_c, units)}, humidity ${Math.round(w.relative_humidity_pct)}%, wind ${formatWind(w.wind_speed_kmh, w.wind_direction_deg, units)}`}
+      title={`Forecast near the map center · ${formatWeekday(t)} ${formatHour(t)}: ${formatTemp(w.temperature_c, units)}, humidity ${Math.round(w.relative_humidity_pct)}%, wind ${formatWind(w.wind_speed_kmh, w.wind_direction_deg, units)} · ${w.source ?? 'Sample weather'}${w.fetched_at ? ` · fetched ${w.fetched_at}` : ''}${w.cache_status === 'stale' || weatherState.error ? ' · stale' : ''}`}
     >
       <Icon size={17} className={`weather-chip__icon${Icon === Sun ? ' is-sun' : ''}`} aria-hidden />
       {formatTemp(w.temperature_c, units)}

@@ -2,7 +2,8 @@
 
 API foundation for the primary `FireWatch_Backend_Architecture.md` specification.
 Status, health and validated JSON forecast read routes are implemented. No real
-ML artifacts have been provided. There are no provider calls or inference on GET.
+ML artifacts have been provided. Forecast GETs never invoke inference. Weather
+GETs use a bounded cache and can fetch Open-Meteo forecasts on a cache miss.
 
 ## Setup and startup
 
@@ -47,14 +48,17 @@ strings, client request IDs, raw exception messages and credentials.
 | `GET /openapi.json`, `/docs` | Generated response/error schemas and interactive documentation |
 | `GET /api/v1/forecasts/risk?hour=...&bbox=w,s,e,n` | Filtered grid GeoJSON; use exactly one hour or California date, optional max_hourly_risk/mean_hourly_risk aggregation |
 | `GET /api/v1/forecasts/cell/{cell_id}?start=...&end=...` | Up to 168 hourly values; end exclusive, missing cells/hours explicit |
+| `GET /api/v1/weather?latitude=...&longitude=...&hour=...` | Normalized hourly forecast at the nearest display anchor; cell_id may replace coordinates |
+| `GET /api/v1/wind?bbox=...&hour=...&density=medium` | Forecast GeoJSON samples, units/source/fetch time, cache state and explicit gaps |
 
 **Readiness measures API initialization, not forecast availability.** A missing
 forecast must not remove a functioning diagnostic API from service. Consumers must
 check `/api/v1/status` for data availability. Forecast routes return
 `503 forecast_not_ready` until validated data exists, or explicitly labeled stale
 last-known-good data. Unknown/unimplemented paths currently return structured 404.
-Provider keys do not change availability. No GET or startup invokes a provider,
-generator, background scheduler or model. No runtime files are created at startup.
+Provider keys do not change availability. Startup and forecast GETs never invoke
+a provider, generator, background scheduler or model. Weather routes refresh the
+cache when required; no runtime files are created at startup.
 
 Source timestamps and model/grid/input versions remain null until corresponding
 validated artifacts exist. `checked_at` and `started_at` are actual API lifecycle
@@ -205,3 +209,54 @@ deploy a reviewed reader compatible with the optional manifest fields. The prior
 snapshot remains referenced by `manifest.previous.json`; a deliberate restore must
 use the same scheduler lock and atomic replacement. Do not simply deploy an older
 strict reader that rejects new fields, delete runtime datasets, or run two writers.
+
+## Live forecast weather
+
+See [WEATHER_INTEGRATION.md](WEATHER_INTEGRATION.md) for sampling, contracts and
+limitations, and https://open-meteo.com/en/docs for provider definitions. An async
+client batches up to WEATHER_BATCH_SIZE anchors, uses bounded timeouts/retries,
+and requests 169 UTC hourly slots so the next 168 slots can be validated exactly.
+No terminal hour is duplicated or extrapolated. C/percent/mm/km/h are normalized;
+wind direction is FROM north. Precipitation describes the preceding-hour amount.
+Provider model issue time is unknown; fetched_at is retrieval time.
+
+Weather refresh is cache-first, at WEATHER_REFRESH_MINUTES. A shared process lock
+and async lock prevent overlapping refreshes; unchanged disk snapshots are not
+reparsed. Persistent cache is atomically replaced only after all batches validate,
+bounded by WEATHER_MAX_ANCHORS and 32 MB. Existing good inputs survive partial
+refreshes, outages and cancellation. Stale fallback is bounded by
+WEATHER_STALE_HOURS; missing hours return 404, unusable caches return 503. Cache
+status and provider last_success_at appear in /status without triggering a fetch.
+Watch provider quotas: coordinate count as well as HTTP batch count matters.
+
+Display sampling is explicitly coarse (0.5-degree lattice), and covers only a
+California bounding extent, not an authoritative state boundary. It is independent
+of 3 km risk geometry. The existing frontend uses its location selection and
+timeline, renders provider/freshness labels, and clears unavailable weather frames.
+Use frontend/.env.example or ?api=http://127.0.0.1:8000/api/v1 with appropriate CORS.
+
+ML integration is **proposed, not a trained-model adapter**. With an agreed mapping
+file matching every authoritative grid ID, a separate command can export complete,
+fresh 168-hour normalized weather inputs:
+
+```sh
+python -m app.jobs.refresh_weather --mapping /absolute/path/to/weather-sampling.json
+```
+
+It writes only `shared/data/weather-inputs/proposed.json`, using a process lock
+and atomic replacement. It refuses missing/stale hours and mismatched grids.
+The example mapping under shared/examples is fixture-only; live grid/boundary and
+the actual model's names/units/transforms/lag features remain external dependencies.
+Mappings must fit the configured cache budget; this exporter does not claim
+statewide support for the ML branch's larger, unmerged anchor set.
+
+Partition revisions hash normalized anchor/hour inputs and mapping, excluding
+fetch times. Overlapping hours retain their revisions as the window rolls.
+No automatic global input_revision or production prediction manifest is changed.
+The existing publisher supports full-window invalidation; connect these revisions
+only after the ML team agrees the inference dependency contract. No training or
+FIRMS integration is changed by this feature.
+
+Weather verification uses mock provider HTTP in CI. A separate manual provider
+check on 2026-10-17T20:48:38Z returned 169 records and all 168 future slots for one
+Sacramento-area coordinate. That is not a statewide availability guarantee.

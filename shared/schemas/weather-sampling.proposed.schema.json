@@ -1,0 +1,86 @@
+{
+  "$defs": {
+    "WeatherPoint": {
+      "additionalProperties": false,
+      "properties": {
+        "anchor_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Anchor Id",
+          "type": "string"
+        },
+        "latitude": {
+          "maximum": 42.1,
+          "minimum": 32,
+          "title": "Latitude",
+          "type": "number"
+        },
+        "longitude": {
+          "maximum": -114,
+          "minimum": -125,
+          "title": "Longitude",
+          "type": "number"
+        }
+      },
+      "required": [
+        "anchor_id",
+        "latitude",
+        "longitude"
+      ],
+      "title": "WeatherPoint",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "proposed-weather-1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "data_mode": {
+      "enum": [
+        "fixture",
+        "live"
+      ],
+      "title": "Data Mode",
+      "type": "string"
+    },
+    "grid_version": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_.:-]+$",
+      "title": "Grid Version",
+      "type": "string"
+    },
+    "points": {
+      "items": {
+        "$ref": "#/$defs/WeatherPoint"
+      },
+      "maxItems": 2000,
+      "minItems": 1,
+      "title": "Points",
+      "type": "array"
+    },
+    "cell_to_anchor": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "maxProperties": 100000,
+      "minProperties": 1,
+      "title": "Cell To Anchor",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "data_mode",
+    "grid_version",
+    "points",
+    "cell_to_anchor"
+  ],
+  "title": "WeatherSampling",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

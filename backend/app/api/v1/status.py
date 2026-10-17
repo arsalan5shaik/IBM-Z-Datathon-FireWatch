@@ -87,9 +87,8 @@ def status(request: Request, runtime: Runtime) -> ServiceStatus:
             owner=settings.scheduler_owner,
             **{field: job.get(field) for field in ("last_success_at", "next_run_at", "last_error")},
         ),
-        providers={
-            name: SubsystemStatus() for name in ("firms", "weather", "incidents", "chatbot")
-        },
+        providers={name: SubsystemStatus() for name in ("firms", "weather", "incidents", "chatbot")}
+        | {"weather": request.app.state.weather.status()},
     )
 
 

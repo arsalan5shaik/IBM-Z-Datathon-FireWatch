@@ -1,5 +1,41 @@
 # Backend implementation status
 
+## Active feature: weather-inference
+
+- Branch: `JS_feat/weather-inference`, isolated `firewatch-weather-worktree`, based
+  on remote main `84ec358` with rolling-window PR #3 merged. No FIRMS branch or ML
+  code changes. The previous rolling-window checkpoint below is historical.
+- Implemented: async validated Open-Meteo forecasts, batched coarse display
+  sampling, bounded persisted cache, async/process refresh locking, stale fallback,
+  stable per-hour revisions, /weather and /wind, provider status, existing frontend
+  timeline/location/wind/weather integration, freshness/error handling, and proposed
+  normalized inference-input export with complete-grid mapping validation.
+- Commits pushed: `6be1be3` provider, `108f000` cache/revisions, `19d2354` APIs,
+  `322600f` frontend, `3af6229` proposed ML handoff/process locking, and `c60c37c`
+  final tests, browser harness, documentation and CI wiring.
+- Targeted provider/cache/API/contract and frontend tests pass. TypeScript passes.
+  Chrome browser smoke passed location, timeline, wind direction/layer, freshness
+  and outage clearing with mock API responses. A manual live provider check at
+  2026-10-17T20:48:38Z returned 169 hourly values and 168 complete future slots for
+  one Sacramento-area point. Automated tests require no provider network access.
+- Contract notice: shared weather-sampling/input schemas are explicitly proposed,
+  model_contract_status=unconfirmed. They do not change forecast artifacts, ML
+  model features or global input_revision. Live ML integration remains blocked
+  on authoritative grid/anchor mapping and model-specific names/units/transforms.
+- Limits: coarse display sampling is not 3 km weather/native provider resolution;
+  California bbox is not authoritative geometry. No statewide inference or
+  LinuxONE verification is claimed. Other provider/features stay outside scope.
+- PR/merge: [PR #4](https://github.com/arsalan5shaik/IBM-Z-Datathon-FireWatch/pull/4)
+  is open against main. Final CI is tracked on that PR. No automatic merge;
+  explicit requester approval is required.
+- Final local verification: **177 backend tests passed** (93.28 s), Ruff lint and
+  format check passed (55 files), both backend HTTP smoke variants passed.
+  **27 frontend tests passed**, TypeScript/production build passed, and the Chrome
+  weather browser smoke passed with deterministic mock responses. One existing
+  Starlette deprecation warning and the existing Vite config-loader warning remain.
+- Earlier milestone CI caught a Ruff formatting issue in the status union; it is
+  corrected locally and final commit/PR CI will verify the combined result.
+
 Updated: 2026-10-17. Foundation PR #1 and forecast-contracts PR #2 are merged.
 The active feature is `JS_feat/rolling-window`, exclusively in the existing
 `firewatch-backend-worktree`. The requester authorized this feature and merge

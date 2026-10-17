@@ -185,11 +185,17 @@ export function nearestWeatherPoint(grid: WeatherGrid, p: LngLat, maxKm = 40): n
       }
   return bd <= maxKm ? best : -1;
 }
-export const weatherFrame = (grid: WeatherGrid, t: number) =>
-  frameAt(t, grid.metadata.forecast_start, grid.metadata.step_minutes, grid.metadata.frames);
+export const weatherFrame = (grid: WeatherGrid, t: number) => {
+  const f = Math.floor((t - Date.parse(grid.metadata.forecast_start)) / (grid.metadata.step_minutes * 60_000));
+  return Number.isFinite(f) && f >= 0 && f < grid.metadata.frames ? f : -1;
+};
 export function weatherAtIndex(grid: WeatherGrid, i: number, t: number): PointWeather {
   const k = weatherFrame(grid, t) * grid.points.length + i;
   return {
+    fetched_at: grid.metadata.fetched_at,
+    complete: grid.metadata.complete,
+    cache_status: grid.metadata.cache_status,
+    source: grid.metadata.source,
     temperature_c: grid.temperature_c[k],
     relative_humidity_pct: grid.relative_humidity_pct[k],
     wind_speed_kmh: grid.wind_speed_kmh[k],
@@ -200,6 +206,7 @@ export function weatherAtIndex(grid: WeatherGrid, i: number, t: number): PointWe
 }
 /** Inverse-distance-weighted wind at any point (for dense arrows at city zoom). */
 export function windAt(grid: WeatherGrid, p: LngLat, t: number, maxKm = 45): { speed: number; dir: number } | null {
+  if (weatherFrame(grid, t) < 0) return null;
   if (nearestWeatherPoint(grid, p, maxKm) < 0) return null;
   const buckets = weatherBuckets.get(grid)!;
   const k = weatherFrame(grid, t) * grid.points.length;
@@ -223,7 +230,7 @@ export function windAt(grid: WeatherGrid, p: LngLat, t: number, maxKm = 45): { s
 }
 
 export function weatherAtPoint(grid: WeatherGrid | null, p: LngLat, t: number): PointWeather | null {
-  if (!grid) return null;
+  if (!grid || weatherFrame(grid, t) < 0) return null;
   const i = nearestWeatherPoint(grid, p);
   return i < 0 ? null : weatherAtIndex(grid, i, t);
 }
