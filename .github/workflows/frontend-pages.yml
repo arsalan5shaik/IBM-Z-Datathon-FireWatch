@@ -3,7 +3,6 @@ name: Frontend → GitHub Pages
 on:
   push:
     branches: [main, AS_feat]
-    paths: ['frontend/**', '.github/workflows/frontend-pages.yml']
   workflow_dispatch:
 
 permissions:
