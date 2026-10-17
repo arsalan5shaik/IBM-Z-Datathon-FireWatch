@@ -1,13 +1,14 @@
-import { RISK_LEVELS, RISK_RAMP } from '../config';
+import { API_BASE, MODEL_SCORE_COLORS, RISK_LEVELS, RISK_RAMP } from '../config';
 import type { RiskLevelKey } from '../types';
 
 export function riskLevel(score: number) {
+  if (API_BASE) return { key: 'unclassified' as const, label: 'Modeled occurrence risk', min: 0, color: '#64748b' };
   let level = RISK_LEVELS[0];
   for (const l of RISK_LEVELS) if (score >= l.min) level = l;
   return level;
 }
 export const riskLevelKey = (score: number): RiskLevelKey => riskLevel(score).key;
-export const riskLabel = (key: RiskLevelKey) => RISK_LEVELS.find((l) => l.key === key)?.label ?? key;
+export const riskLabel = (key: RiskLevelKey) => key === 'unclassified' ? 'Modeled occurrence risk' : RISK_LEVELS.find((l) => l.key === key)?.label ?? key;
 export const isShaded = (score: number) => score >= RISK_LEVELS[1].min;
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -16,6 +17,11 @@ function hexToRgb(hex: string): [number, number, number] {
 }
 /** Colour for a score using the same ramp as the map fill. */
 export function riskColor(score: number): string {
+  if (API_BASE) {
+    const t = Math.max(0, Math.min(1, score));
+    const a = hexToRgb(MODEL_SCORE_COLORS[0]), b = hexToRgb(MODEL_SCORE_COLORS[1]);
+    return `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * t)).join(', ')})`;
+  }
   if (score <= RISK_RAMP[0][0]) return score < RISK_LEVELS[1].min ? '#94A3B8' : RISK_RAMP[0][1];
   for (let i = 1; i < RISK_RAMP.length; i++) {
     const [s1, c1] = RISK_RAMP[i];
@@ -32,8 +38,10 @@ export function riskColor(score: number): string {
 
 /** Human wording for the score depending on whether the model is calibrated. */
 export function scoreCaption(scoreType: string | undefined): string {
+  if (API_BASE) return 'modeled occurrence risk score · calibration unverified';
   return scoreType === 'calibrated_probability' ? 'calibrated probability' : 'model score · uncalibrated';
 }
 export function scoreValue(score: number, scoreType: string | undefined): string {
+  if (API_BASE) return `${Number((score * 100).toFixed(1))} / 100`;
   return scoreType === 'calibrated_probability' ? `${Math.round(score * 100)}%` : score.toFixed(2);
 }

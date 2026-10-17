@@ -36,10 +36,21 @@ interface HistoryResponse {
   hours: { forecast_hour: string; risk_score: number | null; missing?: boolean; score_type?: string }[];
 }
 
+/** Existing backend contract is normalized 0–1; never guess scale from a number. */
+export function apiRiskScore(value: unknown): number {
+  if (value === null) return NaN;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1)
+    throw new HttpError('forecast_score_scale_mismatch', 'Forecast score scale differs from the current 0–1 API contract; ML/backend normalization must be agreed');
+  return value;
+}
+
 export type ViewCoverage = 'ok' | 'zoom-in' | 'loading' | 'missing-hour' | 'error';
 
 export class ForecastTiles {
   private start: number;
+  publishedHours: string[] = [];
+
+  alignWindow(start: number) { if (start !== this.start) this.reset(start); }
   private meta: Partial<RiskMetadata> = {};
   private cells: CellFeature[] = [];
   private index = new Map<string, number>();
@@ -71,17 +82,20 @@ export class ForecastTiles {
     for (const [f, row] of this.values) for (const [i, v] of row) scores[f * n + i] = v;
     return {
       metadata: {
-        generated_at: this.meta.generated_at ?? toIso(Date.now()),
+        generated_at: this.meta.generated_at ?? '',
         model_version: this.meta.model_version ?? 'unknown',
         target: this.meta.target ?? 'Wildfire activity risk (backend)',
         score_type: this.meta.score_type ?? 'relative_risk',
-        calibrated: this.meta.score_type === 'calibrated_probability',
+        calibrated: false,
         not_fire_spread_prediction: true,
         forecast_start: toIso(this.start),
         step_minutes: 60,
         frames: FRAMES,
         source: this.meta.source ?? 'FireWatch API',
         sparse: true,
+        available_hours: this.publishedHours.length ? this.publishedHours.slice() : [...this.values.entries()]
+          .filter(([, row]) => [...row.values()].some(Number.isFinite))
+          .map(([frame]) => toIso(this.start + frame * HOUR_MS)).sort(),
         grid_version: this.meta.grid_version,
         published_at: this.meta.published_at,
       },
@@ -123,6 +137,7 @@ export class ForecastTiles {
   }
 
   private addCells(features: Feature<Area, RiskProps>[], frame: number | null) {
+    for (const feature of features) apiRiskScore(feature.properties?.risk_score);
     for (const f of features) {
       const id = String(f.properties?.cell_id ?? f.id);
       if (!f.geometry) continue;
@@ -136,7 +151,7 @@ export class ForecastTiles {
         let row = this.values.get(frame);
         if (!row) this.values.set(frame, (row = new Map()));
         const v = f.properties?.risk_score;
-        row.set(i, typeof v === 'number' && Number.isFinite(v) ? v : NaN);
+        row.set(i, apiRiskScore(v));
       }
     }
   }
@@ -248,7 +263,7 @@ export class ForecastTiles {
         if (f < 0 || f >= FRAMES) continue;
         let row = this.values.get(f);
         if (!row) this.values.set(f, (row = new Map()));
-        row.set(i, typeof h.risk_score === 'number' && !h.missing ? h.risk_score : NaN);
+        row.set(i, h.missing ? NaN : apiRiskScore(h.risk_score));
       }
       this.changed();
     } catch {
@@ -258,6 +273,7 @@ export class ForecastTiles {
 
   reset(start: number) {
     this.start = start;
+    this.publishedHours = [];
     this.cells = [];
     this.index.clear();
     this.values.clear();

@@ -1,8 +1,9 @@
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { FUEL_CLASSES, HOTSPOT_AGE_COLORS, RISK_LEVELS, RISK_RAMP, WIND_RAMP } from '../config';
+import { API_BASE, MODEL_SCORE_COLORS, FUEL_CLASSES, HOTSPOT_AGE_COLORS, RISK_LEVELS, RISK_RAMP, WIND_RAMP } from '../config';
 import { formatHour, formatWeekday } from '../lib/time';
 import { setState, useStore, validTimeOf } from '../state/store';
 import { kmhToMph } from '../lib/format';
+import { HotspotStatus } from './HotspotStatus';
 
 const gradient = (stops: [number, string][], from: number, to: number) =>
   `linear-gradient(90deg, ${stops.map(([v, c]) => `${c} ${(((v - from) / (to - from)) * 100).toFixed(0)}%`).join(', ')})`;
@@ -20,7 +21,7 @@ export function Legend() {
   if (collapsed)
     return (
       <button type="button" className="legend legend--pill" onClick={() => setState({ legendCollapsed: false })} aria-expanded={false} aria-label="Show legend">
-        <span className="legend__bar legend__bar--mini" style={{ background: gradient(RISK_RAMP, 0.2, 1) }} />
+        <span className="legend__bar legend__bar--mini" style={{ background: API_BASE ? '#64748b' : gradient(RISK_RAMP, 0.2, 1) }} />
         Legend <ChevronUp size={14} />
       </button>
     );
@@ -36,15 +37,11 @@ export function Legend() {
           <div className="legend__title">
             Fire risk <span>· {when}</span>
           </div>
-          <div className="legend__bar" style={{ background: gradient(RISK_RAMP, 0.2, 1) }} />
-          <div className="legend__labels">
-            {RISK_LEVELS.slice(1).map((l) => (
-              <span key={l.key}>{l.label}</span>
-            ))}
-          </div>
-          <div className="legend__foot">
-            Predicted by an experimental model{scoreType === 'calibrated_probability' ? '' : ' · relative score'} · not an official warning
-          </div>
+          {API_BASE ? <><div className="legend__bar" style={{ background: `linear-gradient(90deg, ${MODEL_SCORE_COLORS[0]}, ${MODEL_SCORE_COLORS[1]})` }} /><div className="legend__labels"><span>0</span><span>Risk score / 100</span><span>100</span></div><div className="legend__foot">Modeled occurrence risk, not intensity or severity. Calibration unverified; category thresholds pending ML. Values appear only when supplied by the API.</div></> : <>
+            <div className="legend__bar" style={{ background: API_BASE ? '#64748b' : gradient(RISK_RAMP, 0.2, 1) }} />
+            <div className="legend__labels">{RISK_LEVELS.slice(1).map((l) => <span key={l.key}>{l.label}</span>)}</div>
+            <div className="legend__foot">Sample forecast · illustrative categories, not validated model output{scoreType === 'calibrated_probability' ? '' : ' · relative score'}</div>
+          </>}
         </div>
       )}
       {layers.fires && (
@@ -60,7 +57,8 @@ export function Legend() {
               </span>
             ))}
           </div>
-          <div className="legend__foot">Size = fire radiative power (intensity proxy), not fire size</div>
+          <div className="legend__foot">Size = fire radiative power (MW), not fire size</div>
+          <HotspotStatus />
         </div>
       )}
       {(layers.perimeters || layers.fires) && (

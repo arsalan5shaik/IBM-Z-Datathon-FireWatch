@@ -71,6 +71,15 @@ function StatusPill() {
         <Loader2 size={14} className="spin" /> Loading
       </>
     );
+  } else if (fires.state === 'error' && !fires.data) {
+    cls += ' is-error';
+    content = <>Satellite data unavailable</>;
+  } else if (fires.origin === 'api' && (fires.error || fires.data?.metadata.stale)) {
+    cls += ' is-stale';
+    content = <>Stale satellite cache</>;
+  } else if (origins.includes('api') && [risk, weather].some((ds) => ds.state === 'error' && !ds.data)) {
+    cls += ' is-stale';
+    content = <>API · some layers unavailable</>;
   } else if (origins.includes('fallback') && origins.includes('api')) {
     cls += ' is-stale';
     content = (

@@ -5,6 +5,7 @@ import { select, useStore } from '../../state/store';
 import { fitBbox, flyToPoint } from '../../map/mapRef';
 import { bboxOfGeometry, bboxOfPoints, padBbox, type LngLat } from '../../lib/geo';
 import { confidenceLabel, formatAcres, formatFrp, formatPct, plural, sensorLabel } from '../../lib/format';
+import { utcLabel } from '../../api/fires';
 import { formatStamp, parseTime, relativeTime } from '../../lib/time';
 import type { FireGroup, Incident } from '../../types';
 import { Note, OriginTag, Section, Stats } from '../ui';
@@ -61,6 +62,7 @@ export function HotspotPanel({ detectionId }: { detectionId: string }) {
       <Stats
         rows={[
           ['Detected', at ? `${formatStamp(at)} (${relativeTime(at, now)})` : 'Unavailable'],
+          ['Acquired (UTC)', utcLabel(det.acquired_at)],
           ['Satellite', sensorLabel(det.sensor)],
           ['Confidence', confidenceLabel(det.confidence)],
           ['Fire radiative power', formatFrp(det.frp_mw)],
@@ -80,7 +82,7 @@ export function HotspotPanel({ detectionId }: { detectionId: string }) {
         ]}
       />
       <Note>
-        A hotspot is a satellite-detected heat signal (roughly a 375 m pixel) — not a confirmed fire perimeter. FRP is an intensity proxy, not fire size or
+        A hotspot is a satellite-detected heat signal (roughly a 375 m pixel) — not a confirmed wildfire or fire perimeter. FRP is an intensity proxy, not fire size or
         risk.
       </Note>
       <NearbyFires point={point} km={15} title="Activity nearby" />

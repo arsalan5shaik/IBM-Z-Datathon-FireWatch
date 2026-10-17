@@ -5,6 +5,7 @@ import { cellsForPlace, riskIndex, seriesForCells, statewideShare } from '../sta
 import { effectiveIndex, getState, goLive, setState, setTimeIndex, stepTime, timelineOf, togglePlay, useStore } from '../state/store';
 import { HOUR_MS, dayName, daySegments, formatHour, formatMonthDay, formatStamp, formatValidTime, formatWeekday, localParts, parseTime, relativeTime, tzAbbrev } from '../lib/time';
 import { scoreValue } from '../lib/risk';
+import { API_BASE } from '../config';
 
 const THUMB = 18;
 const pos = (frac: number) => `calc(${THUMB / 2}px + (100% - ${THUMB}px) * ${frac})`;
@@ -88,7 +89,7 @@ function InfoPopover({ onClose }: { onClose: () => void }) {
         <dt>Model run</dt>
         <dd>
           {runAt ? formatStamp(runAt) : 'Unavailable'}
-          <small>{risk ? `${risk.model_version} · ${risk.score_type === 'calibrated_probability' ? 'calibrated' : 'uncalibrated score'}` : ''}</small>
+          <small>{risk ? `${risk.model_version} · ${API_BASE ? 'occurrence risk score / 100 · calibration unverified' : risk.score_type === 'calibrated_probability' ? 'calibrated' : 'uncalibrated score'}` : ''}</small>
         </dd>
         <dt>Weather data</dt>
         <dd>{wAt ? formatStamp(wAt) : 'Unavailable'}</dd>
@@ -198,6 +199,7 @@ export function Timeline() {
   const now = useStore((s) => s.now);
   const calendarOpen = useStore((s) => s.calendarOpen);
   const scoreType = useStore((s) => s.risk.data?.metadata.score_type);
+  const forecast = useStore((s) => s.risk);
   const riskLoading = useStore((s) => s.risk.state === 'loading' && !s.risk.data);
   const [infoOpen, setInfoOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -257,11 +259,17 @@ export function Timeline() {
 
   const atEnd = idx >= tl.frames - 1;
   const hoursAhead = idx - tl.liveIndex;
-  const label = isLive ? 'Now' : dayName(t, now);
+  const label = `${API_BASE ? '' : 'Sample · '}${isLive ? 'Now' : dayName(t, now)}`;
   const peakValue = trend?.absolute && Number.isFinite(trend.values[idx]) ? trend.values[idx] : null;
 
+  if (API_BASE && !forecast.data?.cells.length) return (
+    <div className="timeline timeline--unavailable" ref={rootRef} role="group" aria-label="Model forecast availability">
+      <strong>{riskLoading ? 'Loading model forecast…' : 'Model forecast unavailable'}</strong>
+      <p title={forecast.error ?? undefined}>Waiting for validated ML data. No sample predictions substituted.</p>
+    </div>
+  );
   return (
-    <div className="timeline" ref={rootRef} role="group" aria-label="Forecast timeline (hourly)">
+    <div className="timeline" ref={rootRef} role="group" aria-label={API_BASE ? "Forecast timeline (hourly)" : "Sample forecast timeline (hourly)"}>
       <div className="timeline__head">
         <button type="button" className={`live-btn${isLive ? ' is-live' : ''}`} onClick={goLive} aria-pressed={isLive} title="Show the current hour and live detections">
           <span className="live-dot" /> Live

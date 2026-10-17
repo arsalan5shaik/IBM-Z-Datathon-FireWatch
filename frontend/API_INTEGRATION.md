@@ -1,135 +1,135 @@
-# Frontend ↔ backend integration
+# Frontend / backend integration
 
-How the FireWatch frontend uses the API in `FireWatch_Backend_Architecture.md` §7 (prefix `/api/v1`),
-what it needs from each route, and what happens until a route exists. Verified on 2026-10-17 against
-`backend/` at `f2b0233` running fixture data, and against the dev mock in `mock-api/plugin.ts`.
+Verified locally on 2026-10-17 with the NASA integration checkpoint and main `b901d05` (FIRMS, weather, elevation and location-search updates).
+The authoritative route contract is `FireWatch_Backend_Architecture.md`; adapters live in `src/api/`.
+This feature adds no React app, map instance, dependency or backend source edit; upstream backend changes are preserved.
 
-## Connecting
+## Run on Windows (two terminals)
 
-- Build-time default: `VITE_API_BASE_URL=/api/v1 npm run build` (same-origin, e.g. backend serving `frontend/dist`).
-- Run-time override: open the app with `?api=https://host/api/v1` (handy for the GitHub Pages build).
-  The backend must allow that origin in `CORS_ORIGINS` (e.g. `["https://arsalan5shaik.github.io"]`), and must be
-  HTTPS when the page is HTTPS (browsers block mixed content).
-- `?demo=1` forces the built-in sample data.
+The integration workspace is `C:\Users\Collins\firewatch-env\FireWatch-Integration`.
+The original frontend on port 5173 and its uncommitted work are separate and preserved.
 
-Every dataset is loaded independently. If a route fails (404 because it isn't built yet, 503, network), only that
-layer switches to **sample data**, the status pill reads *Live + sample layers* and a banner says so.
-A refresh failure after a successful load keeps the last good data and marks it stale.
-Weather is an exception to automatic sample fallback when an API is configured:
-unavailable hours show an explicit error, and a previous frame is never reused at
-a different valid hour. Explicit demo mode still uses labeled sample weather.
+Terminal 1, from the integration workspace:
 
-## Routes
-
-| Route | In `backend/` today | Frontend use | If unavailable |
-|---|---|---|---|
-| `GET /status` | ✅ | status pill, About → Data status, polling | sample status |
-| `GET /forecasts/risk?bbox&hour` | ✅ | risk layer, place/cell panels, assistant | sample forecast (labelled) |
-| `GET /forecasts/cell/{cell_id}` | ✅ | 168-hour chart, peak-hour answers | chart shows loaded hours only |
-| `GET /fires/live?bbox&since` | planned | hotspots, flame markers, influence outlines | sample hotspots |
-| `GET /fires/incidents?bbox` | planned | official perimeters, incident panel | 404 → *no official feed* (empty) |
-| `GET /wind?bbox&hour&density` | implemented | existing wind arrows, weather labels/chip, panel conditions | explicit unavailable/stale state |
-| `GET /weather?latitude&longitude&hour` | implemented | optional point/cell API; map/panels reuse the statewide wind samples | 404 for unavailable hour; 503 for no usable cache |
-| `GET /explain/{cell_id}?hour` | planned | *Why this risk?* SHAP bars | “factors not provided yet” — never invented |
-| `POST /chat` | planned | FireWatch AI | offline assistant over loaded data |
-| `/locations/search`, `/locations/{id}/boundary` | implemented | debounced suggestions and selected boundary; `/places/*` aliases retained | explicit error in API mode; bundled Census data in demo mode |
-
-### `GET /status` (implemented)
-Reads `status`, `runtime_arch`, `data_mode`, `forecast.{active_window_start, model_version, last_success_at}`,
-`providers.{firms,weather}.{source_observed_at,last_success_at}`. When the snapshot timestamps change, the
-matching dataset is reloaded (polled every 60 s).
-**Ask:** `forecast` currently stays at its defaults (`unavailable`, 0 valid hours) even while `/forecasts/*` serve
-validated artifacts. Populating it from the forecast store lets the UI show the window and freshness.
-
-### `GET /forecasts/risk?bbox=w,s,e,n&hour=ISO` (implemented)
-The 3 km grid can't be fetched statewide (≈47k cells; `MAX_RESPONSE_CELLS` = 2,000), so the client:
-
-- splits the visible map into fixed **1° × 0.8° tiles** (≈900 cells each) and requests each tile for the selected
-  UTC hour — at most 4 at a time, cached per tile + hour (`src/api/forecastTiles.ts`);
-- on `422 response_too_large` splits that tile into quadrants (never accepts truncation);
-- on `404 forecast_hour_unavailable` shows the hour as missing; `risk_score: null` cells are drawn as gaps, never 0;
-- on `503 forecast_not_ready` at startup, uses labelled sample data;
-- stops at more than 16 tiles in view and asks the user to zoom in (≈ zoom 8 on a laptop).
-
-Fields read: `features[].id | properties.cell_id`, `geometry`, `properties.risk_score`, `score_type`, `target_type`;
-`metadata.active_window_start`, `model_version`, `grid_version`, `published_at`, `generated_at_max`, `source`.
-The timeline spans the 168-hour window from `active_window_start` (California local time on screen, UTC on the wire).
-
-### `GET /forecasts/cell/{cell_id}` (implemented)
-Fills the selected cell's 168 hourly values (`hours[].forecast_hour`, `risk_score`, `missing`).
-**Observed latency:** ~11 s with 168 fixture artifacts of ~1,800 cells, because each request re-reads every
-artifact through the 4-hour cache. At 47k cells per artifact this needs a per-cell index or cache. The client
-waits up to 90 s and shows loaded hours meanwhile.
-
-### Planned routes — fields the client accepts
-Parsing is lenient so the first implementation should just work; the first name listed is preferred.
-
-- **`/fires/live`** — GeoJSON `Point`s. `id` (feature id, `id`, `detection_id`); `acquired_at` (`acquisition_time`,
-  `acq_datetime`, `observed_at`); `satellite` (`sensor`, `source`); `frp` (`frp_mw`); `confidence`; `daynight`;
-  `incident_id`. Metadata: `source`, `generated_at`, `stale`. Requested with the California bbox and `since` = now − 48 h.
-- **`/fires/incidents`** — Features with `Polygon`/`MultiPolygon` or null geometry: `incident_id`, `name`, `acres`,
-  `containment_pct`, `updated_at`, `status`, `url`, optional `center`. Acreage/containment are shown only if present.
-- **`/wind`** — GeoJSON `Point`s for one hour: `wind_speed_kmh` (or `wind_speed_ms`), `wind_direction_deg`
-  (meteorological, *from*), `wind_gust_kmh`; optional `temperature_c`, `relative_humidity_pct`, `precipitation_mm`.
-  Called with the California bbox, `hour`, `density=medium`; re-requested (debounced) as the timeline moves.
-- **`/explain/{cell_id}?hour=`** — `drivers` (or `contributions`): `{feature, label, value, unit, contribution}`;
-  `base_value`, `raw_score`, `risk_score`, `output_scale` (default `log_odds`), `model_version`; optional
-  `conditions` with the model inputs (temperature, humidity, wind, gusts, precipitation, fuel moisture,
-  days since rain, fuel type, vegetation density, elevation, slope).
-- **`POST /chat`** — request is exactly `{message, context?: {cell_id, place_id, hour, incident_id}}` (only keys
-  that are set). Response: `answer`, `citations` (or `grounding`) `[{dataset, as_of}]`, `disclaimer`.
-  Errors including `503 chatbot_unavailable` fall back to the offline assistant with a notice.
-- **Places** — the frontend ships Census boundaries and a search index (`public/data/places.json`, IDs
-  `place-ca-<name>`, `county-ca-<name>`, `zip-<ZIP>`). `/locations/*` now serves that same data in API mode;
-  bundled files remain the demo source and local context index. See the two ambiguous-ID corrections below.
-
-## Open items for the backend / ML teams
-
-Weather feature update: `/wind` returns normalized C, percent, mm, km/h and
-meteorological degrees **from** north, UTC `forecast_hour`, source/fetch timestamps,
-cache freshness and coverage. The client adds 180 degrees to draw arrows toward
-flow. Existing location selection and the risk timeline drive weather lookup; no
-second timeline or new map layers were added. Hour responses are cached for at
-most one minute in the client; old requests cannot overwrite a newer selection.
-The API batches/caches forecasts at stable 0.5-degree display anchors. This is a
-coarse display sample and not a 3 km weather grid. Forecast retrieval times are
-shown; Open-Meteo issue time is unknown. A new model forecast is not inferred from
-weather availability. See `backend/WEATHER_INTEGRATION.md` for ML blockers.
-
-Location-search update: selection calls `/weather` at Census representative
-coordinates and `/wind` within a bounded surrounding region at the same timeline
-hour. It clears previous-location weather immediately, cancels old requests and
-shows sample coordinates/fetch time. County weather is representative-point only.
-No silent sample-weather fallback in API mode. Dataset sources, corrected ambiguous
-IDs, missing ML mapping and public HTTPS backend setup are documented in
-`backend/LOCATIONS_INTEGRATION.md`. Pages builds use the optional repository Actions
-variable `VITE_API_BASE_URL`; the runtime `?api=` override remains supported.
-
-Rolling-window PR #3 has resolved status completeness and indexed cell-history
-reads described as open issues in the original notes above. Real ML handoff and
-statewide overview/risk-category agreement remain separate work.
-
-1. **Statewide overview.** The frontend spec wants broad risk regions at California zoom; bbox slices can't
-   provide that. Suggested: a cacheable geometry-once grid (`GET /forecasts/grid` or vector tiles) plus a
-   geometry-free `GET /forecasts/scores?hour=` (`[cell_id…]`, `[score…]`). The client can switch to it quickly.
-2. **Status completeness** (see `/status` above) and **cell-history latency**.
-3. **Risk categories.** The frontend spec labels Elevated / High / Very High / Extreme (thresholds 0.2 / 0.4 / 0.6 /
-   0.8 in `src/config.ts`); `backend` metadata proposes low / elevated / high at 0.4 / 0.7. Colours already agree
-   (orange → red → purple, purple highest). Agree one set and update `RISK_LEVELS`.
-4. **Explanations** need per-cell, per-hour ML output (`shared/schemas/explanation.v1` in the architecture plan).
-
-## Testing locally
-
-```bash
-# 1. Mock of the whole contract (sample data behind the API shapes)
-FIREWATCH_MOCK_API=1 npm run dev                       # open /?api=/api/v1
-FIREWATCH_MOCK_API=1 FIREWATCH_MOCK_ONLY=forecasts npm run dev   # only the routes backend/ has today
-
-# 2. The real backend with fixture artifacts in SHARED_DATA_DIR (grid.geojson + predictions/)
-cd backend && SHARED_DATA_DIR=/path/to/fixtures ALLOW_FIXTURE_DATA=true \
-  CORS_ORIGINS='["http://localhost:5173"]' uv run --no-sync uvicorn app.main:create_app --factory --port 8000
-# then open http://localhost:5173/?api=http://127.0.0.1:8000/api/v1#map=9.2/39.75/-121.6/0/0
+```powershell
+cd backend
+# Uses this worktree's existing ignored .env; never paste its key into commands/chat.
+$env:CORS_ORIGINS='["http://localhost:5174","http://127.0.0.1:5174"]'
+.\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000 --no-access-log
 ```
 
-`npm test` includes `src/api/forecastTiles.test.ts`, which runs the tile loader against a stand-in for
-`backend/app/api/v1/forecasts.py` (cell cap, 422 split, missing hours, null scores, cell history).
+Terminal 2, from the integration workspace:
+
+```powershell
+cd frontend
+$env:FIREWATCH_API_PROXY='http://127.0.0.1:8000'
+Remove-Item Env:FIREWATCH_MOCK_API -ErrorAction SilentlyContinue
+npm.cmd run dev -- --host 127.0.0.1 --port 5174 --strictPort
+```
+
+Open `http://127.0.0.1:5174/?api=/api/v1`. The `?api=` selects real API mode; without configuration,
+the existing default remains explicitly labeled sample mode. `?demo=1` deliberately selects samples.
+Do not enable `FIREWATCH_MOCK_API` for real-provider verification.
+The proxy uses same-origin browser requests. Direct `?api=http://127.0.0.1:8000/api/v1` requests require
+an exact matching CORS origin. Both localhost and 127.0.0.1 on 5174 passed preflight; 5175 was rejected.
+Production can set `VITE_API_BASE_URL=/api/v1` before building and serve UI/API on one origin.
+
+The API reads the cache; its Refresh button does not make a NASA provider request.
+For automatic refresh, run ONE backend-owned polling process in a third terminal from `backend/`:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.jobs.refresh_fires --loop
+```
+
+Check that no other refresh owner is already running. Refresh interval is configured by the existing
+backend FIRMS settings; see `backend/README.md`. Cache freshness describes retrieval, not real-time
+satellite coverage. Cached detections remain satellite thermal anomalies, not confirmed incidents.
+
+## Implemented routes and UI behavior
+
+| Route under /api/v1 | Current status | UI behavior |
+|---|---|---|
+| GET /status | Implemented | Actual provider/model status; no synthetic status on API failure |
+| GET /fires/live?bbox&since | Implemented, real NOAA-20/21 verified | Existing hotspot layer, clusters, FRP sizing, UTC details and cache status |
+| GET /forecasts/risk?bbox&hour | Implemented; currently 503 forecast_not_ready | Explicit unavailable state, no sample substitution |
+| GET /forecasts/cell/{cell_id} | Implemented; needs validated artifacts | Only received values; missing values stay missing |
+| GET /wind?bbox&hour&density | Implemented by weather PR #4 | Existing arrows/conditions, exact selected hour, provider freshness |
+| GET /weather?latitude&longitude&hour | Implemented | Selected-location weather at Census representative coordinates, plus bounded /wind samples |
+| GET /locations/search?q&limit | Implemented by PR #8 | Debounced California suggestions; explicit API error without silent static fallback |
+| GET /locations/{id}/boundary | Implemented by PR #8 | Selected Census boundary; /places aliases retained |
+| GET /fires/incidents?bbox | Not implemented | 404 means no official feed; no fictional incident names |
+| GET /explain/{cell_id}?hour | Planned/unavailable | No invented SHAP contributions |
+| POST /chat | Planned/unavailable | Labeled offline assistant grounded in loaded data |
+
+In API mode, search and boundaries use `/locations/*`, serving the same Census data as the bundled
+local context index; explicit sample mode uses bundled files. No new geocoding service was introduced.
+Location selection calls `/weather` at Census representative coordinates and `/wind` in a bounded
+surrounding region at the same UTC timeline hour. Previous-location weather is cleared immediately;
+old boundary/weather requests are cancelled or ignored, including ABA selection changes. County
+weather describes a representative point, not every part of the county. No sample weather replaces
+an unavailable API response. Source coordinates, forecast hour and provider refresh time are shown.
+Dataset sources, two corrected ambiguous place IDs, missing ML mapping and the public HTTPS backend
+setup are documented in `backend/LOCATIONS_INTEGRATION.md`. Upstream corrected Census boundaries,
+verification scripts and tests are preserved. Pages uses the optional repository Actions variable
+`VITE_API_BASE_URL`; the runtime `?api=` override remains supported.
+
+## NASA GeoJSON adapter
+
+`src/api/fires.ts` validates FeatureCollection / Point geometry, [longitude, latitude] ordering,
+unique source IDs, aware UTC acquisition timestamps, and nonnegative FRP (MW) or missing values.
+Invalid records/responses fail visibly rather than manufacture defaults. IDs and confidence categories
+are retained. Responses are bounded to the backend's 5,000-feature limit.
+
+Metadata retained: cache_status, last_successful_refresh, last_attempted_refresh, observation range,
+cache age, matched_count, returned_count, truncated, partial source/time/boundary/observation flags,
+and sanitized per-source refresh errors. These appear alongside the existing observation legend
+and in data status. Selected 6/12/24/48-hour counts are different from the API's full requested count.
+A truncated response is explicitly marked; the UI does not silently request unbounded data.
+
+Initial outage -> unavailable; successful empty response -> no matching cached observations;
+failed refresh -> retain actual last-known-good observations with a stale warning. Real API mode never
+substitutes generated observations, official incidents or model predictions. Explicit sample mode stays
+available and labeled. Browser outage/reload/recovery, real hotspot UTC/FRP details, search, 2D/3D,
+terrain/default and visibility toggles were checked locally.
+
+## Forecast handoff still required
+
+ML confirms rolling 168 hourly polygon forecasts, modeled wildfire occurrence risk scores out of 100,
+not intensity/severity, and no confirmed probability calibration. Thresholds and validated artifacts
+are still pending. The API currently returns `503 forecast_not_ready`; no forecast values were fabricated.
+
+**Scale mismatch to resolve:** the current authoritative backend Pydantic schema validates risk_score
+in [0, 1]. The frontend converts that documented normalized API representation to a 0-100 display.
+It rejects raw out-of-contract values such as 42 instead of guessing a scale. When the ML sample arrives,
+ML/backend must agree normalization or revise the contract together before integration is complete.
+The UI always labels these as scores, not percentages/probabilities, even if an unsupported calibration
+claim appears. Real-data colors form a continuous score ramp, with no low/moderate/high cutoffs.
+FRP sizing/age colors apply only to observed hotspots. Existing categorical thresholds remain solely
+inside the explicitly labeled sample demonstration.
+
+The existing bounded forecast adapter requests 1 degree by 0.8 degree tiles (at most four requests at
+a time), splits 422 response_too_large responses, and asks users to zoom in above 16 visible tiles.
+Null scores remain missing. Valid timeline hours come from validated complete-window status or values
+actually received; unavailable hours cannot be selected/played. An initial 503 disables forecast playback.
+A rolling window resets tile/history caches. Geometry/score/time fields use the existing adapters/types.
+
+SHAP needs real endpoint output and declared output scale; no log-odds assumption or synthetic model
+explanation is attached to API risk. LinuxONE deployment remains unverified.
+
+## Validation / review
+
+```powershell
+npm.cmd test
+npm.cmd run typecheck
+npm.cmd run build
+```
+
+The synchronized frontend has no lint script. During local verification, the already installed Oxlint executable
+from the preserved older frontend was used read-only; no lint dependency was added. It reported two
+pre-existing warnings (empty spread fallbacks in store.ts and panels/shared.tsx).
+Before synchronization, the merged FIRMS/weather backend passed 249 tests, Ruff lint/format, both smoke modes and Linux/Windows CI.
+After synchronization, the frontend passed 50 tests, TypeScript/build and lint (the same two existing warnings).
+See the PR checks for the synchronized backend suite and smoke results.
+The optional legacy location-browser script defaults to teammate-specific ports and assumes a usable forecast-hour control.
+It is not a readiness check while validated model forecasts are unavailable; current search/weather behavior was verified directly in the running app.
+The frontend integration is isolated on CO_feat/frontend-integration for review; check its PR validation before merging.

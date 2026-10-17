@@ -1,6 +1,6 @@
 name: Frontend → GitHub Pages
 
-on:git p
+on:
   push:
     branches: [main]
   workflow_dispatch:
