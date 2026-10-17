@@ -143,3 +143,11 @@ def test_reject_path_escape(deployed, tmp_path):
     (tmp_path / "predictions/manifest.json").write_text(json.dumps(manifest))
     with TestClient(app) as client:
         assert client.get("/api/v1/forecasts/cell/MOCK_CA_000").status_code == 503
+
+
+@pytest.mark.parametrize(
+    "params", [{"hour": ""}, {"date": "9999-12-31"}, {"hour": "2026-03-08T08:01:00Z"}]
+)
+def test_invalid_time_precedes_data_readiness(client, params):
+    response = client.get("/api/v1/forecasts/risk", params={"bbox": "-120,36,-119,37"} | params)
+    assert response.status_code == 422

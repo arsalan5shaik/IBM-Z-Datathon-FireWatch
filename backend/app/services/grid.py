@@ -157,6 +157,8 @@ class Grid:
         if not 0 < len(document["features"]) <= 100000:
             raise ValueError("Invalid grid count")
         for feature in document["features"]:
+            if feature.get("type") != "Feature":
+                raise ValueError("GeoJSON Feature required")
             cell_id = feature["properties"]["cell_id"]
             geometry = feature["geometry"]
             bounds = geometry_bounds(geometry)

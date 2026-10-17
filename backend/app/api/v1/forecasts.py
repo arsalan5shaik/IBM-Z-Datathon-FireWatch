@@ -29,7 +29,7 @@ def hour_value(text):
 def risk(
     request: Request,
     bbox: str = Query(max_length=100),
-    hour: str | None = None,
+    hour: str | None = Query(default=None, min_length=20, max_length=40),
     date: Date | None = None,
     aggregation: str = "max_hourly_risk",
 ):
@@ -37,6 +37,10 @@ def risk(
         raise APIError("invalid_time_selection", "Specify exactly one of hour or date", 422)
     if aggregation not in {"max_hourly_risk", "mean_hourly_risk"}:
         raise APIError("invalid_aggregation", "Unknown risk-index aggregation", 422)
+    try:
+        expected = [hour_value(hour)] if hour is not None else day_hours(date)
+    except OverflowError:
+        raise APIError("invalid_date", "Date outside supported calendar range", 422) from None
     try:
         bounds = parse_bbox(bbox)
     except ValueError:
@@ -49,7 +53,6 @@ def risk(
         raise APIError(
             "response_too_large", "Use a smaller bbox; results are not truncated", 422
         ) from None
-    expected = [hour_value(hour)] if hour else day_hours(date)
     selected = [h for h in expected if h in manifest.hours]
     if not selected:
         raise APIError("forecast_hour_unavailable", "No forecast hours in requested selection", 404)
