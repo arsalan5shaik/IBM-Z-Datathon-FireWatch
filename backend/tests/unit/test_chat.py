@@ -717,6 +717,57 @@ def test_client_disconnect_cancels_model_work_and_releases_shared_lease(setup):
     app.state.chat_limits.release(lease)
 
 
+def test_disconnect_during_preflight_cancels_provider_and_releases_lease(setup, monkeypatch):
+    from starlette.requests import Request
+
+    from app.api.v1.chat import chat
+
+    app, provider = setup
+    entered, cancelled = asyncio.Event(), []
+    model = MockResponses()
+    app.state.chat = ChatService(app.state, model, lambda: NOW)
+    app.state.chat_limits.settings = app.state.settings.model_copy(
+        update={"chat_max_concurrent_requests": 1}
+    )
+
+    async def held_fetch(*args):
+        try:
+            entered.set()
+            await asyncio.Future()
+        finally:
+            cancelled.append(True)
+
+    monkeypatch.setattr(provider, "fetch", held_fetch)
+
+    async def scenario():
+        async def receive():
+            await asyncio.wait_for(entered.wait(), timeout=10)
+            return {"type": "http.disconnect"}
+
+        req = Request(
+            {
+                "type": "http",
+                "app": app,
+                "scheme": "http",
+                "path": "/api/v1/chat",
+                "query_string": b"",
+                "headers": [(b"host", b"localhost")],
+                "client": ("127.0.0.1", 1),
+                "server": ("localhost", 80),
+            },
+            receive,
+        )
+        with pytest.raises(APIError) as error:
+            await chat(request(), req)
+        assert error.value.code == "chat_client_disconnected"
+
+    run(scenario())
+    # A disconnect can validly precede model startup (the historical race).
+    assert model.calls == [] and cancelled == [True]
+    lease = app.state.chat_limits.acquire("another-user")
+    app.state.chat_limits.release(lease)
+
+
 def test_trusted_proxy_auth_is_required_and_never_sent_to_browser(setup):
     app, _ = setup
     token = "fixture-proxy-token-" + "x" * 32

@@ -8,6 +8,11 @@ architecture. The backend serves validated hourly JSON and supports an opt-in,
 single-owner rolling 168-hour publisher. Real ML artifacts and provider ingestion
 remain integration dependencies; fixture responses are explicitly labeled.
 
+Docker deployment: [Docker and IBM LinuxONE guide](docs/DOCKER_LINUXONE.md)
+provides separate API/FIRMS services, persistent storage, same-origin frontend
+routing, and reproducible amd64/s390x builds. See the linked verification report
+for measured results and native LinuxONE deployment limitations.
+
 For the IBM Datathon. California-only current NASA thermal anomaly monitoring + 7-day ML hotspot-occurrence **risk** estimates, illustrative coverage overlay, grounded chat and same-layer 2D/3D MapLibre map.
 
 1. `01_ARCHITECTURE.md` — deployment graph, caching/update sequence, s390x constraints and LinuxONE judging evidence.

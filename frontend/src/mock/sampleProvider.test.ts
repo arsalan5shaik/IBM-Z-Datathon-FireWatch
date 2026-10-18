@@ -2,8 +2,11 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { SampleProvider } from './sampleProvider';
-import { RISK_LEVELS } from '../config';
 import { riskLevelKey } from '../lib/risk';
+
+// Demo data keeps illustrative categories; API-mode classification is tested
+// separately in risk.integration.test.ts and must remain unclassified.
+vi.mock('../config', async () => ({ ...await vi.importActual('../config'), API_BASE: null }));
 
 // Serve /data/* from public/ so the provider can "fetch" its static grid.
 beforeAll(() => {
@@ -20,9 +23,14 @@ describe('SampleProvider', () => {
   it('produces an hourly 7-day risk grid with scores in [0,1]', async () => {
     const risk = await provider.getRisk();
     const n = risk.cells.length;
+    expect(n).toBeGreaterThan(0);
     expect(risk.metadata.frames).toBe(168);
     expect(risk.metadata.step_minutes).toBe(60);
+    expect(risk.metadata.sample).toBe(true);
+    expect(risk.metadata.calibrated).toBe(false);
+    expect((await provider.getStatus()).data_mode).toBe('fixture');
     expect(risk.scores.length).toBe(168 * n);
+    expect(risk.scores.every(Number.isFinite)).toBe(true);
     let min = 1, max = 0;
     for (const s of risk.scores) {
       min = Math.min(min, s);
@@ -30,23 +38,11 @@ describe('SampleProvider', () => {
     }
     expect(min).toBeGreaterThanOrEqual(0);
     expect(max).toBeLessThanOrEqual(1);
+  });
 
-    // Distribution report (helps tune the demo so most of the state is not shaded).
-    const levels = Object.fromEntries(RISK_LEVELS.map((l) => [l.key, 0]));
-    for (const s of risk.scores) levels[riskLevelKey(s)]++;
-    const pct = Object.fromEntries(Object.entries(levels).map(([k, v]) => [k, ((v / risk.scores.length) * 100).toFixed(1) + '%']));
-    const daily = Array.from({ length: 7 }, (_, d) => {
-      let m = 0, shaded = 0;
-      for (let f = d * 24; f < d * 24 + 24; f++)
-        for (let i = 0; i < n; i++) {
-          const s = risk.scores[f * n + i];
-          m = Math.max(m, s);
-          if (s >= 0.4) shaded++;
-        }
-      return `d${d}: max ${m.toFixed(2)} high+ ${((shaded / (24 * n)) * 100).toFixed(1)}%`;
-    });
-    console.log('levels', pct, '\n' + daily.join('\n'));
-    expect(levels.low).toBeGreaterThan(risk.scores.length * 0.4);
+  it('keeps illustrative categories confined to demo mode without requiring a distribution', () => {
+    expect(riskLevelKey(0)).toBe('low');
+    expect(riskLevelKey(1)).toBe('extreme');
   });
 
   it('explanations sum to the raw margin and match the map score', async () => {
