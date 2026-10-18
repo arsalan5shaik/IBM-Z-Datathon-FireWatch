@@ -1,3 +1,4 @@
+import { HistoricalERCDetails } from './components/HistoricalERCDetails';
 import { ERCV6Panel } from './components/ERCV6Panel';
 import { useEffect } from 'react';
 import { MapView } from './map/MapView';
@@ -32,6 +33,7 @@ export function App() {
     <div className={`app${panelOpen ? ' has-panel' : ''}${chatOpen ? ' has-chat' : ''}`}>
       <MapView />
       <ERCV6Panel />
+      <HistoricalERCDetails />
       <TopBar />
       <Banners />
       <MapControls />

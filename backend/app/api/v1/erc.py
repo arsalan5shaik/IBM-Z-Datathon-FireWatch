@@ -36,7 +36,10 @@ def load_snapshot(request: Request):
     if (
         data.get("model_version") != MODEL_VERSION
         or data.get("model_sha256") != MODEL_SHA256
-        or data.get("kind") != "experimental_stockton_weather_driven_erc_g_probe"
+        or data.get("kind") not in (
+            "experimental_stockton_weather_driven_erc_g_probe",
+            "experimental_multicell_weather_driven_erc_g_probe",
+        )
         or not data.get("snapshot_id")
     ):
         raise HTTPException(status_code=503, detail="Invalid model provenance")
@@ -95,7 +98,7 @@ def metadata(data):
         "temporal_resolution": "daily",
         "metric": "ERC-G",
         "data_mode": "experimental_live_weather_probe",
-        "publication_mode": "manual_probe_snapshot",
+        "publication_mode": data.get("publication_mode", "manual_probe_snapshot"),
         "forecast_skill_validated": False,
         "official_danger_categories": False,
         "prediction_count": len(data["predictions"]),
@@ -105,6 +108,45 @@ def metadata(data):
 @router.get("/metadata")
 def get_metadata(request: Request):
     return metadata(load_snapshot(request))
+
+
+
+@router.get("/points")
+def get_forecast_points(request: Request, lead_day: int = 1):
+    """Only published predictions; color is relative to current day's cell scores."""
+    if not 1 <= lead_day <= 7:
+        raise HTTPException(422, "lead_day must be 1 through 7")
+    snapshot = load_snapshot(request)
+    names = snapshot.get("cell_names") or {}
+    points = []
+    for row in snapshot["predictions"]:
+        if row.get("lead_day") != lead_day:
+            continue
+        features = row["features"]
+        lat, lon = features["lat"], features["lon"]
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            continue
+        points.append({
+            "cell_id": row["cell_id"],
+            "location_name": names.get(row["cell_id"], row["cell_id"]),
+            "latitude": lat,
+            "longitude": lon,
+            "forecast_days": 7,
+            "valid_date": row["valid_date"],
+            "erc_g_display": row["erc_g_display"],
+        })
+    values = [p["erc_g_display"] for p in points]
+    return {
+        "snapshot_id": snapshot["snapshot_id"],
+        "model_version": snapshot["model_version"],
+        "metric": "ERC-G",
+        "coverage": "published_cells_only",
+        "color_scale": "relative_across_forecasted_cells_not_danger_categories",
+        "lead_day": lead_day,
+        "min_score": min(values) if values else None,
+        "max_score": max(values) if values else None,
+        "points": points,
+    }
 
 
 @router.get("/cells/{cell_id}")
@@ -131,6 +173,7 @@ def get_cell(request: Request, cell_id: str):
     return {
         **metadata(data),
         "cell_id": cell_id,
+        "location_name": (data.get("cell_names") or {}).get(cell_id),
         "predictions": sorted(predictions, key=lambda row: row["valid_date"]),
     }
 
@@ -142,79 +185,35 @@ def explain_cell(
     date: str,
     snapshot_id: str,
 ):
-    """Explain the raw V6 ERC-G prediction for one stored cell/day."""
-    from functools import lru_cache
+    """Serve verified TreeSHAP explanations for the published snapshot."""
+    snapshot = load_snapshot(request)
 
-    import numpy as np
-    import xgboost as xgb
-
-    @lru_cache(maxsize=1)
-    def load_model():
-        model_path = (
-            request.app.state.settings.repo_root
-            / "ml-prep/models/releases/firewatch_erc_v6_2023_2025/model.json"
-        )
-
-        digest = __import__("hashlib").sha256(model_path.read_bytes()).hexdigest()
-        if digest != MODEL_SHA256:
-            raise HTTPException(503, "Frozen V6 model checksum mismatch")
-
-        model = xgb.Booster()
-        model.load_model(str(model_path))
-        return model
-
-    data = load_snapshot(request)
-
-    if data["snapshot_id"] != snapshot_id:
+    if snapshot["snapshot_id"] != snapshot_id:
         raise HTTPException(409, "Requested snapshot is not current")
 
-    record = next(
-        (
-            row for row in data["predictions"]
-            if row["cell_id"] == cell_id and row["valid_date"] == date
-        ),
-        None,
+    path = (
+        Path(request.app.state.settings.shared_data_dir)
+        / "erc-v6"
+        / "explanations-current.json"
     )
 
-    if record is None:
-        raise HTTPException(404, "No prediction for requested cell/date")
+    try:
+        explanations = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise HTTPException(503, "SHAP explanations are not available") from None
 
-    features = record["features"]
-    values = np.array([[features[name] for name in FEATURES]], dtype=np.float32)
+    if (
+        explanations.get("snapshot_id") != snapshot_id
+        or explanations.get("model_sha256") != MODEL_SHA256
+    ):
+        raise HTTPException(503, "SHAP explanations are not current")
 
-    model = load_model()
-    matrix = xgb.DMatrix(values, feature_names=list(FEATURES))
+    for record in explanations.get("explanations", []):
+        if (
+            record.get("cell_id") == cell_id
+            and record.get("valid_date") == date
+            and record.get("snapshot_id") == snapshot_id
+        ):
+            return record
 
-    raw = float(model.predict(matrix)[0])
-    contributions = model.predict(matrix, pred_contribs=True)[0]
-
-    baseline = float(contributions[-1])
-    shap_values = contributions[:-1]
-
-    additivity_error = abs(baseline + float(shap_values.sum()) - raw)
-
-    if abs(raw - record["erc_g_raw"]) > 1e-3 or additivity_error > 1e-3:
-        raise HTTPException(503, "Model prediction/SHAP verification failed")
-
-    return {
-        "snapshot_id": snapshot_id,
-        "cell_id": cell_id,
-        "valid_date": date,
-        "metric": "ERC-G",
-        "model_version": MODEL_VERSION,
-        "prediction_raw": raw,
-        "prediction_display": max(0.0, raw),
-        "baseline": baseline,
-        "features": [
-            {
-                "name": name,
-                "value": features[name],
-                "shap_value": float(shap_values[i]),
-            }
-            for i, name in enumerate(FEATURES)
-        ],
-        "additivity_error": additivity_error,
-        "data_status": "ok",
-        "explanation_type": "TreeSHAP",
-        "forecast_skill_validated": False,
-    }
+    raise HTTPException(404, "No explanation for requested cell/date")
