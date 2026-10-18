@@ -9,15 +9,24 @@ from fastapi import APIRouter, HTTPException, Request
 router = APIRouter(prefix="/api/v1/erc", tags=["experimental-erc-g"])
 
 MODEL_VERSION = "firewatch_erc_v6_2023_2025"
-MODEL_SHA256 = (
-    "cb124badd47c898448c30500fe13f4827481e1986bd2a776605a0b99308b2e33"
-)
+MODEL_SHA256 = "cb124badd47c898448c30500fe13f4827481e1986bd2a776605a0b99308b2e33"
 
 FEATURES = (
-    "temp_max_c", "rh_min_pct", "wind_mean_ms", "precip_mm",
-    "elevation_mean_m", "lat", "lon", "day_sin", "day_cos",
-    "precip_7d_mm", "precip_30d_mm", "temp_mean_7d_c",
-    "rh_mean_7d_pct", "dry_days_14d", "wind_mean_7d_ms",
+    "temp_max_c",
+    "rh_min_pct",
+    "wind_mean_ms",
+    "precip_mm",
+    "elevation_mean_m",
+    "lat",
+    "lon",
+    "day_sin",
+    "day_cos",
+    "precip_7d_mm",
+    "precip_30d_mm",
+    "temp_mean_7d_c",
+    "rh_mean_7d_pct",
+    "dry_days_14d",
+    "wind_mean_7d_ms",
 )
 
 
@@ -170,7 +179,8 @@ def explain_cell(
 
     record = next(
         (
-            row for row in data["predictions"]
+            row
+            for row in data["predictions"]
             if row["cell_id"] == cell_id and row["valid_date"] == date
         ),
         None,
