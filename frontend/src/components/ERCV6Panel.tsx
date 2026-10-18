@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronLeft, Minus } from 'lucide-react';
 import { API_BASE } from '../config';
 import { setState, useStore } from '../state/store';
+import { useAnimatedNumber } from './ui';
 
 const CELL = 'CA3K_X-0038_Y-0002';
 
@@ -30,34 +31,6 @@ type Explanation = {
     shap_value: number;
   }[];
 };
-
-/** Tween a displayed number towards `target` so day changes count rather than jump. */
-function useAnimatedNumber(target: number | null, ms = 380): number | null {
-  const [value, setValue] = useState(target);
-  const from = useRef(target);
-  useEffect(() => {
-    if (target == null) return setValue(null);
-    const start = from.current ?? target;
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if (reduce || start === target) {
-      from.current = target;
-      return setValue(target);
-    }
-    const t0 = performance.now();
-    let id = 0;
-    const step = (now: number) => {
-      const k = Math.min(1, (now - t0) / ms);
-      const e = 1 - (1 - k) ** 3;
-      const v = start + (target - start) * e;
-      from.current = v;
-      setValue(v);
-      if (k < 1) id = requestAnimationFrame(step);
-    };
-    id = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(id);
-  }, [target, ms]);
-  return value;
-}
 
 /**
  * Experimental V6 ERC-G forecast for one grid cell (Stockton), served by the FireWatch API.
@@ -116,7 +89,7 @@ function ERCV6Card({ base }: { base: string }) {
   }, [endpoint]);
 
   const day = forecast?.predictions[selected];
-  const shown = useAnimatedNumber(day ? day.erc_g_display : null);
+  const shown = useAnimatedNumber(day ? day.erc_g_display : NaN);
 
   useEffect(() => {
     if (!forecast || !day) return;
@@ -208,7 +181,7 @@ function ERCV6Card({ base }: { base: string }) {
           {day && (
             <div className="v6__value">
               <div className="v6__date">{day.valid_date}</div>
-              <div className="v6__number">{shown != null ? shown.toFixed(2) : '–'}</div>
+              <div className="v6__number">{Number.isFinite(shown) ? shown.toFixed(2) : '–'}</div>
               <div className="v6__caption">ERC-G index · daily estimate</div>
             </div>
           )}

@@ -1,4 +1,5 @@
 import { fitCalifornia } from '../map/mapRef';
+import { toggleReplay } from './replay';
 import { closeOverlays, getState, goLive, setState, stepTime, togglePlay, toggleLayer } from './store';
 
 export const SHORTCUTS: [string, string][] = [
@@ -10,6 +11,7 @@ export const SHORTCUTS: [string, string][] = [
   ['3', 'Toggle 2D / 3D'],
   ['T', 'Toggle Default / Terrain map'],
   ['W', 'Toggle wind'],
+  ['R', 'Replay recent hotspots'],
   ['H', 'California overview'],
   ['A', 'Ask FireWatch AI'],
   ['Esc', 'Close panels'],
@@ -63,6 +65,10 @@ export function bindKeyboard(): () => void {
       case 'w':
       case 'W':
         toggleLayer('wind');
+        break;
+      case 'r':
+      case 'R':
+        toggleReplay();
         break;
       case 'h':
       case 'H':

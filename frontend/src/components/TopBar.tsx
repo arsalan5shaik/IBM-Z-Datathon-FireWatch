@@ -6,6 +6,7 @@ import { fitCalifornia } from '../map/mapRef';
 import { weatherAtPoint } from '../state/lookups';
 import { select, setState, useStore, validTimeOf } from '../state/store';
 import { SearchBox } from './SearchBox';
+import { AnimatedNumber } from './ui';
 
 export function FlameLogo({ size = 26 }: { size?: number }) {
   return (
@@ -41,8 +42,8 @@ function WeatherChip() {
       className="weather-chip"
       title={`Forecast near the map center · ${formatWeekday(t)} ${formatHour(t)}: ${formatTemp(w.temperature_c, units)}, humidity ${Math.round(w.relative_humidity_pct)}%, wind ${formatWind(w.wind_speed_kmh, w.wind_direction_deg, units)} · ${w.source ?? 'Sample weather'}${w.fetched_at ? ` · fetched ${w.fetched_at}` : ''}${w.cache_status === 'stale' || weatherState.error ? ' · stale' : ''}`}
     >
-      <Icon size={17} className={`weather-chip__icon${Icon === Sun ? ' is-sun' : ''}`} aria-hidden />
-      {formatTemp(w.temperature_c, units)}
+      <Icon key={Icon.displayName ?? String(hour >= 7 && hour < 19)} size={17} className={`weather-chip__icon${Icon === Sun ? ' is-sun' : ''}`} aria-hidden />
+      <AnimatedNumber value={w.temperature_c} format={(v) => formatTemp(v, units)} />
     </span>
   );
 }

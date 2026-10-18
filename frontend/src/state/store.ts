@@ -122,6 +122,8 @@ export interface Replay {
   to: number;
   /** Current replay clock. */
   at: number;
+  /** Playback position 0–1 (event-paced: not linear in time, see state/replay.ts). */
+  progress: number;
   playing: boolean;
 }
 export interface TourStop {

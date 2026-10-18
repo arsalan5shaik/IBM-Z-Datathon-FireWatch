@@ -1,4 +1,5 @@
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, History } from 'lucide-react';
+import { startReplay } from '../state/replay';
 import { API_BASE, MODEL_SCORE_COLORS, FUEL_CLASSES, HOTSPOT_AGE_COLORS, RISK_LEVELS, RISK_RAMP, WIND_RAMP } from '../config';
 import { formatHour, formatWeekday } from '../lib/time';
 import { setState, useStore, validTimeOf } from '../state/store';
@@ -16,6 +17,8 @@ export function Legend() {
   const units = useStore((s) => s.units);
   const scoreType = useStore((s) => s.risk.data?.metadata.score_type);
   const lookback = useStore((s) => s.lookbackHours);
+  const hasDetections = useStore((s) => (s.fires.data?.detections.length ?? 0) > 0);
+  const replaying = useStore((s) => !!s.replay);
   const when = isLive ? 'now' : `${formatWeekday(t)} ${formatHour(t)}`;
 
   if (collapsed)
@@ -58,6 +61,11 @@ export function Legend() {
             ))}
           </div>
           <div className="legend__foot">Size = fire radiative power (MW), not fire size</div>
+          {hasDetections && (
+            <button type="button" className="legend__replay" onClick={startReplay} disabled={replaying}>
+              <History size={14} aria-hidden /> {replaying ? 'Replaying…' : `Replay the last ${lookback} h`}
+            </button>
+          )}
           <HotspotStatus />
         </div>
       )}

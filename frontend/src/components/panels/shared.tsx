@@ -31,15 +31,62 @@ export function PanelShell({
 }) {
   const [expanded, setExpanded] = useState(false);
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
+  const drag = useRef<{ y0: number; dy: number; t0: number; moved: boolean } | null>(null);
+  const suppressClick = useRef(false);
   useEffect(() => {
     titleRef.current?.focus({ preventScroll: true });
   }, [title]);
+
+  // Phones: the details sheet follows the finger. Drag down to collapse / dismiss, up to expand;
+  // a quick flick counts even when the distance is short. Releasing springs to the nearest stop.
+  const sheetDrag = {
+    onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+      if (window.innerWidth >= 700 || (e.target as HTMLElement).closest('button:not(.panel__handle), a')) return;
+      drag.current = { y0: e.clientY, dy: 0, t0: performance.now(), moved: false };
+      e.currentTarget.setPointerCapture(e.pointerId);
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+      const d = drag.current;
+      const el = sheetRef.current;
+      if (!d || !el) return;
+      d.dy = e.clientY - d.y0;
+      if (!d.moved && Math.abs(d.dy) < 6) return;
+      d.moved = true;
+      el.classList.add('is-dragging');
+      // Rubber-band when pulling past the top.
+      el.style.setProperty('--drag', `${d.dy < 0 ? d.dy * (expanded ? 0.15 : 0.45) : d.dy}px`);
+    },
+    onPointerUp: () => {
+      const d = drag.current;
+      const el = sheetRef.current;
+      drag.current = null;
+      if (!d || !el) return;
+      el.classList.remove('is-dragging');
+      el.style.setProperty('--drag', '0px');
+      if (!d.moved) return;
+      suppressClick.current = true;
+      setTimeout(() => (suppressClick.current = false), 0);
+      const v = d.dy / Math.max(1, performance.now() - d.t0);
+      if (d.dy > 110 || v > 0.65) {
+        if (expanded) setExpanded(false);
+        else select(null);
+      } else if (d.dy < -50 || v < -0.65) setExpanded(true);
+    },
+  };
   return (
-    <aside className={`panel${expanded ? ' is-expanded' : ''}`} role="dialog" aria-modal="false" aria-labelledby="panel-title">
-      <button type="button" className="panel__handle" aria-label={expanded ? 'Collapse details' : 'Expand details'} onClick={() => setExpanded(!expanded)}>
+    <aside ref={sheetRef} className={`panel${expanded ? ' is-expanded' : ''}`} role="dialog" aria-modal="false" aria-labelledby="panel-title">
+      <button
+        type="button"
+        className="panel__handle"
+        aria-label={expanded ? 'Collapse details' : 'Expand details'}
+        onClick={() => !suppressClick.current && setExpanded(!expanded)}
+        {...sheetDrag}
+        onPointerCancel={sheetDrag.onPointerUp}
+      >
         <span />
       </button>
-      <header className="panel__head">
+      <header className="panel__head" {...sheetDrag} onPointerCancel={sheetDrag.onPointerUp}>
         <span className="panel__icon">{icon}</span>
         <div className="panel__titles">
           <h2 id="panel-title" ref={titleRef} tabIndex={-1}>

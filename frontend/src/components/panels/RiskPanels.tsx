@@ -14,7 +14,7 @@ import { placeSubtitle, placeTitle } from '../../lib/search';
 import { HOUR_MS, formatStamp, formatValidTime, parseTime } from '../../lib/time';
 import type { PlaceResult } from '../../types';
 import { RiskSparkline } from '../charts';
-import { Note, OriginTag, Section } from '../ui';
+import { AnimatedNumber, Note, OriginTag, Section } from '../ui';
 import { Conditions, NearbyFires, PanelShell, WhySection, useExplanation } from './shared';
 
 function useTimeline() {
@@ -39,7 +39,7 @@ function RiskHeadline({ score, scoreType, t, extra }: { score: number; scoreType
       <div className="risk-card__main">
         <span className="risk-card__level">{riskLabel(key)}</span>
         <span className="risk-card__score">
-          {scoreValue(score, scoreType)}
+          <AnimatedNumber value={score} format={(v) => scoreValue(v, scoreType)} />
           <small>{scoreCaption(scoreType)}</small>
         </span>
       </div>
