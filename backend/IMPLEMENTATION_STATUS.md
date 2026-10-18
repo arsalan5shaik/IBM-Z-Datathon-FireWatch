@@ -1,6 +1,17 @@
 # Backend implementation status
 
-## Live API verification: 2026-10-18
+## Chatbot reliability run 3: 2026-10-18
+
+- Follow-up on PR #12 (`JS_feat/live-api-verification`); no Docker, ML training,
+  SHAP or FIRMS ingestion changes.
+- Fixed: research attempt timeout/retry (57 s -> 8.4-18.4 s research answers),
+  completed open/find page citations, redundant/wasted synthesis calls, FIRMS
+  definitions from reviewed NASA text, secret-pattern and local-time false
+  rejections, research date/attribution wording.
+- Live: 13 questions, 13 OpenAI attempts, 7 search actions, about $0.10; Chrome
+  acceptance PASS. Details and remaining limits: `docs/LIVE_API_VERIFICATION.md`.
+
+## Live API verification: 2026-10-18 (history)
 
 - Branch `JS_feat/live-api-verification`, isolated worktree from main `a409571`.
   Scoped corrections pushed in `69070ec`; no teammate frontend/ML implementation

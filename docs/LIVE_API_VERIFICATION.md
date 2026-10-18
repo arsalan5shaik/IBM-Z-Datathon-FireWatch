@@ -4,9 +4,142 @@ Verified 2026-10-18 UTC, locally on Windows/Python 3.11.17 and Chrome.
 Base: main `a409571`; branch: `JS_feat/live-api-verification`.
 No Dockerfiles, deployment infrastructure, ML artifacts or teammate branches were changed.
 
-## Chatbot acceptance follow-up - 2026-10-18 UTC
+## Chatbot reliability run 3 - 2026-10-18 02:30-03:30 UTC (current)
 
-**Live-demo acceptance: BLOCKED. PR #12 remains open; do not merge.**
+Run on Windows / Python 3.11 in an isolated worktree of PR #12 (head `8725ab3`
+at start), with real gpt-5-mini Responses, OpenAI hosted search, NASA FIRMS and
+Open-Meteo. No Docker, ML training, SHAP or FIRMS ingestion code was changed. The
+two sections below this one are retained history; their open items are resolved
+or restated here.
+
+| Readiness | Result |
+|---|---|
+| Code merge (PR #12) | PASS: automated suites, CI and the live chatbot acceptance gates below |
+| Local live demo | PASS for the tested paths, with the limitations listed below |
+| Public deployment | NOT READY / out of scope: no authenticated HTTPS gateway; LinuxONE unverified |
+
+### Root causes and fixes
+
+| Problem (handoff item) | Root cause | Fix and regression evidence |
+|---|---|---|
+| 57 s research answer with an unexplained retry (B) | Hosted research shared the 25 s synthesis attempt timeout. Research takes about 20-25 s, so attempt 1 timed out and the SDK repeated the whole research: 25 s + backoff + 24.6 s = the measured 50.1 s, paying for search twice | `OPENAI_RESEARCH_TIMEOUT_SECONDS=45`; `ResponsesClient` owns one bounded retry (SDK retries off): transient 408/409/429/5xx/connection only, never after a research timeout, never auth/invalid/`insufficient_quota`, never a >2 s retry-after; all attempts share the request deadline. Secret-free `chat_model_attempt` / `chat_request_summary` logs. Tests: research timeout = 1 attempt; transient research 503 = 2; quota/long backoff/400 = 1; deadline caps attempts |
+| Valid research rejected (A) | Citable URLs came only from `search` sources; a completed `open_page`/`find_in_page` retrieval of the cited page rejected the whole result. Exact string matching also broke on tracking parameters | Completed page-action URLs are retrieval evidence; failed/unfinished actions never are; matching ignores only host case, fragment, trailing slash and `utm_*`. Nine accept/reject combinations (multi-search, open/find, failed+completed, in-progress, out of order, duplicates, failed-only, failed open_page, model-written URL, lookalike host, no annotation) |
+| Redundant paid calls (B) | Research-only answers paid for a synthesis that only paraphrased the cited research; failed required research paid for a synthesis whose output finalize() always replaced | Research-only questions return the validated research answer (one call; falls back to synthesis if validation fails); unavailable required research returns the server notice with no model call; general wind science no longer fetches a local forecast |
+| FRP 502 and "low/nominal" wording (C) | Definitions of FireWatch's own FIRMS fields depended on variable research and model memory | `app/services/chat_reference.py`: version-controlled NASA FIRMS FAQ / VIIRS attribute text (pages reviewed 2026-10-18 UTC). Standalone definition questions return `mode=reference`, `model=null`, no OpenAI/search call; data questions get the definitions as citable `ref-*` evidence |
+| Live: valid research rejected as a "secret" | Key pattern `sk-[A-Za-z0-9_-]{12,}` had no boundary: a cited CAL FIRE Board PDF path `...risk-assessment-pdf` matched | Key-shaped tokens only (`(?<![A-Za-z0-9])sk-` + 20 chars); configured-key exact match unchanged. Regression for the URL and for real key shapes |
+| Live: correct weather answer returned 502 | Numeric grounding saw only the UTC forecast hour; "15:00 PDT" for 22:00Z had no digits in evidence (an earlier "02:26 PDT" passed by coincidence) | Pacific clock times must equal the America/Los_Angeles rendering of a cited timestamp (exact, PDT/PST, 12/24 h); wrong local times now fail even if the digits occur elsewhere |
+| Live: research answers stated "published Jul 21, 2026", credited uncited sources and ended with "If you want, I can..." | Research instructions; provider metadata publication times are unverified | Instructions forbid stating publication/update/crawl dates and uncited attribution; trailing offer paragraphs are dropped from direct research answers (server owns follow-ups) |
+| Live: coordinates written "-121.47929 W" | Model formatting | Transport rule: signed values or hemisphere letters, never both. Browser rerun: "-121.47929, 38.60741" |
+
+Preserved: fail-closed citation/URL/domain validation, timestamp-field checks,
+verified Fahrenheit conversion, invented-score/SHAP/detection rejection, current
+evacuation-order guard, unsupported-capability rejection (offers of imagery are
+still rejected; descriptive science use of "imagery" is allowed; any "radius"
+claim is still rejected), deterministic missing-ML/SHAP answers, quotas, access
+mode and the unchanged FireWatch system prompt (SHA-256 test).
+
+### Live acceptance results
+
+Selected hour = current UTC hour. "Model" = OpenAI HTTP attempts for that answer.
+Content was read in full and checked against the cached FIRMS data, a direct
+`/weather` read and the cited official pages; a 200 alone was not counted.
+
+| # | Question | Result | Time (s) | Model | Evidence |
+|---|---|---|---:|---:|---|
+| 1 | What does fire radiative power mean? | PASS | 0.691 | 0 | `reference`: rate of radiative energy per pixel, MW, proxy of intensity; not acreage, perimeter, containment or probability. NASA VIIRS attributes + FIRMS FAQ |
+| 2 | How does wind affect wildfire spread? | PASS | 12.722 | 1 | Direct research: spread rate, flame tilt/preheating, spotting, terrain, gusts; no current weather invented. NWS Wildfire Hazards; USFS RMRS Fire Behavior; USFS Treesearch; PNW 2024; USFS article. First run 18.574 s via synthesis fallback (secret false positive, fixed) |
+| 3 | Satellite hotspot vs confirmed wildfire? | PASS | 0.049 | 0 | `reference`: 375 m pixel centre, other heat sources, no perimeter/acreage/containment, absence is not proof. FIRMS FAQ |
+| 4 | What does nominal confidence mean for this VIIRS detection? | PASS | 0.050 | 0 | `reference`: n = nominal, strong (>15 K) anomaly, not low, not a probability |
+| 5 | Where can I find official California wildfire incident updates? | PASS | 11.950 | 1 | CAL FIRE Incidents; Cal OES State Emergency Plan; local OES/NWS pointers. One completed search action |
+| 6 | How should I prepare for wildfire evacuation? (Stockton) | PASS | 10.813 | 1 | Plan, go-bag, vehicle, defensible space, San Joaquin alerts, leave when ordered; no active order claimed. Ready.gov; Ready.gov guide; San Joaquin ESF-15. First run 18.386 s stated source dates/uncited sources (instructions fixed) |
+| 7 | What should I do if I receive an evacuation order? | PASS | 10.643 | 1 | Leave immediately, follow official routes, 911; no local order invented. CAL FIRE Map Legend, Cal OES guides, Ready.gov, CalHHS (one CDPH floods page is weakly relevant) |
+| 8 | Latest detections near Sacramento? | PASS | 6.589 | 1 | One NOAA-20 detection: acquired 2026-10-17T09:26:00Z (02:26 PDT), FRP 20.75 MW, nominal, not a confirmed incident; matches cache. Fetch time not used as observation time |
+| 9 | Stockton's risk over the next seven days? | PASS | 0.051 | 0 | `data_unavailable`: no score/category/probability |
+| 10 | Why is wildfire risk elevated in Stockton? | PASS | 0.056 | 0 | `data_unavailable`: no risk or SHAP attribution invented |
+| 11 | Confidence values of latest detections near Sacramento? | PARTIAL | 6.928 | 1 | Correct l/n/h definitions citing `ref-*` sources; did not restate that the single detection is nominal |
+| 12 | Evacuation orders in Stockton right now? | PASS | 8.432 | 1 | Current-order guard; local sources only: SJ OES Current Conditions, SJReady Know Your Zone, Cal OES evacuation layer |
+| 13 | Weather in Stockton tomorrow afternoon? | PASS after fix | 5.046 | 1 | 2026-10-18 15:00 PDT: 30.9 C (87.6 F), RH 22%, 0.0 mm, wind 11.5 km/h from 294 deg, gusts 13.3 km/h; equals direct `/weather` read. First run 502 (local-time false rejection, fixed) |
+
+Also observed: the production limiter returned 429 `chat_rate_limit` for a
+seventh request within one minute (no OpenAI call), as configured.
+
+The provider emitted exactly one completed `search` action in each of the seven
+research calls, so the **mixed completed/failed action path was not reproduced
+live**. It is covered by the mocked combinations above, which exercise the same
+validator that accepted all seven live retrievals.
+
+**Real Chrome** (`verify-live-apis.mjs`, acceptance mode): PASS, six checks,
+zero page errors: 459 real FIRMS records / 191 rendered, hotspot panel
+acquisition/confidence/FRP, Stockton missing-model answer (no OpenAI), FRP
+reference answer with clickable NASA links labeled "Official reference",
+Sacramento detection answer with current location/hour, 390 px mobile layout.
+Expected network limitations remained visible: `/fires/incidents` 404 and
+missing-artifact `/forecasts/risk` 503. In that browser run `/weather` and
+`/wind` also returned 503 for about one minute after a cold-cache statewide
+refresh failed (existing one-minute retry backoff in `WeatherCache`); immediately
+afterwards a point read took 1.1 s and the statewide wind grid 11.1 s. Warm the
+weather cache before a demo.
+
+### Latency by stage
+
+| Path | Calls | Measured |
+|---|---|---|
+| Reference / missing-model answers | 0 | 0.049-0.056 s warm; 0.691 s first request after start |
+| FireWatch data + synthesis | 1 | synthesis 4.2-6.9 s; total 5.0-6.9 s |
+| Research-only (direct) | 1 | research 8.4-18.3 s, median 11.1 s; total 8.4-18.4 s (was 57.2 s with 50.1 s research) |
+| Research + synthesis fallback | 2 | 13.3 s + 5.2 s = 18.6 s (before the secret-pattern fix) |
+
+Zero retries, timeouts or provider errors occurred in 13 attempts.
+
+### Usage and estimated cost (approved cap: 25 chats, 40 attempts, 15 searches)
+
+- 20 chat HTTP requests (6 answered without a model, 1 rate-limited), 13 OpenAI
+  HTTP attempts = 13 SDK operations, 7 research calls, **7 search actions**.
+- SDK-reported usage: **94,312 input tokens (36,352 cached), 8,450 output
+  (3,904 reasoning)**. At gpt-5-mini $0.25/M input, $0.025/M cached input and
+  $2/M output: about **$0.032**; seven searches at $0.01: **$0.07**; observable
+  estimate **about $0.10**, not an invoice. Billing was not queried.
+- One NASA FIRMS refresh (no `--force`, no loop): NOAA-20 292 / NOAA-21 347
+  California observations, latest acquisition 2026-10-17T21:31:00Z, fetched
+  2026-10-18T03:01:40Z; no new overpass since run 2.
+- Private evidence outside Git: `%TEMP%/firewatch-chat-acceptance-3/`
+  (`budget.json`, `answers.json`, `browser.json`, `server.log`, screenshots).
+  Earlier ledgers were not modified or reset.
+
+### Commands (this run)
+
+```powershell
+# backend: one FIRMS refresh, then the capped server (caps are mandatory)
+uv run --no-sync python -m app.jobs.refresh_fires
+$env:FIREWATCH_RUN_PAID_VERIFICATION='1'; $env:FIREWATCH_VERIFY_SESSION='firewatch-chat-acceptance-3'
+$env:FIREWATCH_VERIFY_MAX_CHAT='25'; $env:FIREWATCH_VERIFY_MAX_ATTEMPTS='40'; $env:FIREWATCH_VERIFY_MAX_SEARCHES='15'
+$env:CORS_ORIGINS='["http://127.0.0.1:5178"]'
+uv run --no-sync python scripts/live_verification_server.py
+# second backend shell, same two FIREWATCH_ variables: questions by number
+uv run --no-sync python scripts/chat_acceptance_live.py 1 3 4 9 10
+# frontend
+npm run dev -- --host 127.0.0.1 --port 5178 --strictPort
+$env:FIREWATCH_VERIFY_CHAT_ACCEPTANCE='1'; node scripts/verify-live-apis.mjs
+```
+
+### Remaining limitations
+
+- Mixed-action research: PASS on mocks, not reproduced live (provider behavior).
+- Real ML risk artifacts and SHAP remain unavailable (separate ML dependency);
+  answers report unavailability and never invent scores or attributions.
+- Numeric grounding is a conservative text heuristic. Research answers are
+  validated for citations/URLs/domains, not numerically; their content was
+  reviewed by hand for this run only.
+- Research answers may still offer, inline, to look up a county's pages (a
+  supported research action). Data-unavailable answers show raw `[fw-N]` markers.
+- Weather cold-cache refresh failures make weather unavailable for one minute
+  (existing backoff); warm the cache before a demo.
+- Public hosting (authenticated gateway, HTTPS, CORS), LinuxONE runtime and
+  Docker are out of scope and unverified.
+
+## Chatbot acceptance follow-up - 2026-10-18 UTC (superseded by run 3)
+
+**Live-demo acceptance at that time: BLOCKED; superseded by run 3 above.**
 The missing-prediction timeout path is fixed and verified. General research is
 still too variable for an unqualified demo-readiness claim, and the conservative
 search allowance was consumed before all requested science questions could run.
