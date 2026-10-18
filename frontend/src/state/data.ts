@@ -131,7 +131,15 @@ export function requestRiskView(bbox: BBoxT, t: number) {
   if (!apiRisk()) return;
   const coverage = remote!.requestView(bbox, t);
   if (getState().riskCoverage !== coverage) setState({ riskCoverage: coverage });
+  // A 25 % margin around the view loads in the background, so short pans reveal ready cells.
+  const [w, s, e, n] = bbox;
+  const mx = (e - w) * 0.25, my = (n - s) * 0.25;
+  if (coverage !== 'zoom-in') remote!.requestView([w - mx, s - my, e + mx, n + my], t, 20);
+  // Upcoming hours load quietly so stepping and playback don't wait on the network.
+  if (coverage === 'ok' || coverage === 'loading') remote!.prefetchHours(t, getState().playing ? 6 : 2);
 }
+/** Per-hour load state of the visible forecast tiles (backend mode; null in sample mode). */
+export const riskHourStates = () => (apiRisk() ? remote!.hourStates() : null);
 /** A searched place may extend beyond the screen; allow more tiles for it. */
 export function requestRiskArea(bbox: BBoxT, t: number) {
   if (apiRisk()) remote!.requestView(bbox, t, 40);

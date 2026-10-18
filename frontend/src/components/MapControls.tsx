@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Compass, Flame, Layers, Leaf, Loader2, Minus, Navigation, Plus, Radar, Shapes, Thermometer, Wind, X } from 'lucide-react';
-import { LOOKBACK_OPTIONS } from '../config';
+import { API_BASE, LOOKBACK_OPTIONS } from '../config';
+import { prefersReducedMotion } from '../map/motion';
 import { locateMe } from '../state/actions';
 import { setState, toggleLayer, useStore, type Dataset } from '../state/store';
 import { resetNorth, zoomBy } from '../map/mapRef';
@@ -46,6 +47,8 @@ function LayersPopover({ onClose }: { onClose: () => void }) {
   const lookback = useStore((s) => s.lookbackHours);
   const opacity = useStore((s) => s.riskOpacity);
   const units = useStore((s) => s.units);
+  const motion = useStore(useShallow((s) => ({ smoothMotion: s.smoothMotion, windFlow: s.windFlow, statewideView: s.statewideView, skyline: s.skyline, dayNight: s.dayNight, view: s.view })));
+  const osReduced = prefersReducedMotion();
   const datasets = useStore(useShallow((s) => ({ fires: s.fires, risk: s.risk, perimeters: s.incidents, wind: s.weather, weather: s.weather, vegetation: s.risk })));
   const vegAvailable = useStore((s) => !s.risk.data || s.risk.data.cells.some((c) => c.properties.fuel));
   const ref = useRef<HTMLDivElement>(null);
@@ -117,6 +120,55 @@ function LayersPopover({ onClose }: { onClose: () => void }) {
           />
         </div>
       )}
+      <div className="popover__group">
+        <h3 className="popover__label">Motion &amp; effects</h3>
+        <ul className="layer-rows layer-rows--compact">
+          <li className={`layer-row${motion.smoothMotion && !osReduced ? ' is-on' : ''}${osReduced ? ' is-disabled' : ''}`}>
+            <label className="layer-row__text" htmlFor="pref-motion">
+              <span>Smooth motion</span>
+              <small>{osReduced ? 'Off: your device asks for reduced motion' : 'Animated transitions between hours and layers'}</small>
+            </label>
+            <Switch id="pref-motion" checked={motion.smoothMotion && !osReduced} onChange={(v) => !osReduced && setState({ smoothMotion: v })} label="Smooth motion" />
+          </li>
+          <li className={`layer-row${motion.windFlow ? ' is-on' : ''}`}>
+            <label className="layer-row__text" htmlFor="pref-flow">
+              <span>Animated wind flow</span>
+              <small>Streaks drift downwind with the wind layer</small>
+            </label>
+            <Switch id="pref-flow" checked={motion.windFlow} onChange={(v) => setState({ windFlow: v, ...(v ? { layers: { ...layers, wind: true } } : {}) })} label="Animated wind flow" />
+          </li>
+          <li className={`layer-row${motion.dayNight ? ' is-on' : ''}`}>
+            <label className="layer-row__text" htmlFor="pref-night">
+              <span>Day &amp; night</span>
+              <small>Shade night at the selected hour</small>
+            </label>
+            <Switch id="pref-night" checked={motion.dayNight} onChange={(v) => setState({ dayNight: v })} label="Day and night shading" />
+          </li>
+          <li className={`layer-row${motion.skyline ? ' is-on' : ''}`}>
+            <label className="layer-row__text" htmlFor="pref-skyline">
+              <span>3D risk skyline</span>
+              <small>{motion.view === '3d' ? 'Raise cells by risk score' : 'Raise cells by risk score (switches to 3D)'}</small>
+            </label>
+            <Switch id="pref-skyline" checked={motion.skyline} onChange={(v) => setState({ skyline: v, ...(v ? { view: '3d' as const } : {}) })} label="3D risk skyline" />
+          </li>
+        </ul>
+        {!API_BASE && layers.risk && (
+          <>
+            <h3 className="popover__label popover__label--sub">Statewide view</h3>
+            <Segmented
+              label="Statewide risk view"
+              size="sm"
+              value={motion.statewideView}
+              options={[
+                { value: 'surface', label: 'Smooth', title: 'Smoothed surface at state zoom; model cells when zoomed in' },
+                { value: 'coarse', label: 'Coarse', title: 'Larger cells at state zoom' },
+                { value: 'cells', label: 'Cells', title: 'Model cells at every zoom' },
+              ]}
+              onChange={(v) => setState({ statewideView: v })}
+            />
+          </>
+        )}
+      </div>
       <div className="popover__group popover__group--row">
         <h3 className="popover__label">Units</h3>
         <Segmented

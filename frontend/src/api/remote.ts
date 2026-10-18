@@ -281,6 +281,12 @@ export class RemoteProvider implements DataProvider {
   requestView(bbox: [number, number, number, number], t: number, maxTiles?: number) {
     return this.tiles?.ensureView(bbox, t, maxTiles) ?? 'ok';
   }
+  prefetchHours(t: number, hours?: number) {
+    this.tiles?.prefetch(t, hours);
+  }
+  hourStates(): Uint8Array | null {
+    return this.tiles?.hourStates() ?? null;
+  }
   requestHistory(cellId: string) {
     void this.tiles?.ensureHistory(cellId);
   }

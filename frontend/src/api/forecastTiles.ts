@@ -58,6 +58,10 @@ export class ForecastTiles {
   private tiles = new Map<string, 'loading' | 'done' | 'missing' | 'error'>();
   private histories = new Set<string>();
   private queue: (() => Promise<void>)[] = [];
+  /** Background (prefetch) jobs run only when no visible-area job is waiting. */
+  private lowQueue: (() => Promise<void>)[] = [];
+  /** Tiles of the last visible view (buffer bar + prefetch). */
+  private lastKeys: [number, number][] = [];
   private active = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -157,8 +161,8 @@ export class ForecastTiles {
   }
 
   private pump() {
-    while (this.active < CONCURRENCY && this.queue.length) {
-      const job = this.queue.shift()!;
+    while (this.active < CONCURRENCY && (this.queue.length || this.lowQueue.length)) {
+      const job = (this.queue.length ? this.queue : this.lowQueue).shift()!;
       this.active++;
       void job().finally(() => {
         this.active--;
@@ -214,6 +218,7 @@ export class ForecastTiles {
     for (let tx = Math.floor(w / TILE_W); tx * TILE_W < e; tx++)
       for (let ty = Math.floor(s / TILE_H); ty * TILE_H < n; ty++) keys.push([tx, ty]);
     if (keys.length > maxTiles) return 'zoom-in';
+    if (maxTiles <= 16) this.lastKeys = keys;
     let loading = false, missing = 0, errors = 0;
     for (const [tx, ty] of keys) {
       const key = `${tx}:${ty}@${hour}`;
@@ -248,6 +253,52 @@ export class ForecastTiles {
     return 'ok';
   }
 
+  /**
+   * Quietly load the visible tiles for the next `hours` forecast hours (and one hour back), so
+   * stepping or playing never waits on the network. Uses the background queue.
+   */
+  prefetch(t: number, hours = 3) {
+    const f0 = this.frameOf(t);
+    for (const df of [1, -1, ...Array.from({ length: Math.max(0, hours - 1) }, (_, k) => k + 2)]) {
+      const f = f0 + df;
+      if (f < 0 || f >= FRAMES) continue;
+      const hour = toIso(this.start + f * HOUR_MS);
+      if (this.publishedHours.length && !this.publishedHours.includes(hour)) continue;
+      for (const [tx, ty] of this.lastKeys) {
+        const key = `${tx}:${ty}@${hour}`;
+        if (this.tiles.has(key)) continue;
+        this.tiles.set(key, 'loading');
+        this.lowQueue.push(async () => {
+          try {
+            this.tiles.set(key, await this.fetchTile(this.tileBox(tx, ty), hour));
+          } catch {
+            this.tiles.delete(key);
+          }
+          this.changed();
+        });
+      }
+    }
+    this.pump();
+  }
+
+  /** Per-hour load state of the visible tiles: 0 unknown, 1 loading, 2 loaded, 3 not published. */
+  hourStates(): Uint8Array {
+    const out = new Uint8Array(FRAMES);
+    if (!this.lastKeys.length) return out;
+    for (let f = 0; f < FRAMES; f++) {
+      const hour = toIso(this.start + f * HOUR_MS);
+      let done = 0, missing = 0, loading = 0;
+      for (const [tx, ty] of this.lastKeys) {
+        const st = this.tiles.get(`${tx}:${ty}@${hour}`);
+        if (st === 'done') done++;
+        else if (st === 'missing') missing++;
+        else if (st === 'loading') loading++;
+      }
+      out[f] = done + missing === this.lastKeys.length ? (done ? 2 : 3) : loading || done ? 1 : 0;
+    }
+    return out;
+  }
+
   /** All 168 hours for one cell (sparkline, peak-hour questions). */
   async ensureHistory(cellId: string) {
     if (this.histories.has(cellId) || !this.index.has(cellId)) return;
@@ -279,6 +330,9 @@ export class ForecastTiles {
     this.values.clear();
     this.tiles.clear();
     this.histories.clear();
+    this.queue = [];
+    this.lowQueue = [];
+    this.lastKeys = [];
     this.changed();
   }
 }

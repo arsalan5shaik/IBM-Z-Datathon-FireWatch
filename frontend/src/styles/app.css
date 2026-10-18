@@ -1076,6 +1076,12 @@ a {
 }
 
 /* ---------- timeline ---------- */
+/* Registered so the progress fill can transition with the gliding playhead. */
+@property --progress {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
 .timeline {
   position: absolute;
   z-index: 9;
@@ -1167,8 +1173,26 @@ a {
   color: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
+.play-btn {
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    background var(--dur-base);
+}
 .play-btn:hover {
   background: #000;
+  transform: scale(1.05);
+}
+.play-btn:active {
+  transform: scale(0.93);
+}
+.play-btn svg {
+  animation: icon-swap var(--dur-base) var(--ease-spring);
+}
+@keyframes icon-swap {
+  from {
+    transform: scale(0.5) rotate(-30deg);
+    opacity: 0;
+  }
 }
 .cal-btn {
   flex: none;
@@ -1178,6 +1202,7 @@ a {
   flex: 1;
   height: 60px;
   min-width: 0;
+  transition: --progress var(--glide, 0ms);
 }
 .timeline__rail {
   position: absolute;
@@ -1250,9 +1275,8 @@ a {
   height: 18px;
   margin-top: 18px;
   border-radius: 50%;
-  background: var(--accent);
-  border: 3px solid #fff;
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.35);
+  /* Invisible hit target: the visible thumb (.timeline__thumb) glides between hours. */
+  opacity: 0;
 }
 .timeline__range::-moz-range-track {
   height: 32px;
@@ -1262,15 +1286,136 @@ a {
   width: 12px;
   height: 12px;
   border-radius: 50%;
+  opacity: 0;
+  transform: translateY(11px);
+}
+.timeline__thumb {
+  position: absolute;
+  top: 18px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
   background: var(--accent);
   border: 3px solid #fff;
   box-shadow: 0 1px 5px rgba(0, 0, 0, 0.35);
-  transform: translateY(11px);
+  transform: translateX(-50%);
+  pointer-events: none;
+  transition:
+    left var(--glide, 0ms),
+    transform var(--dur-base) var(--ease-spring),
+    box-shadow var(--dur-base) var(--ease-out);
 }
-.timeline__range:focus-visible::-webkit-slider-thumb {
+.timeline__track:hover .timeline__thumb {
+  transform: translateX(-50%) scale(1.1);
+}
+.timeline__track.is-dragging .timeline__thumb {
+  transform: translateX(-50%) scale(1.22);
+  box-shadow:
+    0 0 0 6px rgba(10, 122, 255, 0.18),
+    0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.timeline__range:focus-visible ~ .timeline__thumb {
   box-shadow:
     0 0 0 4px rgba(10, 122, 255, 0.3),
     0 1px 5px rgba(0, 0, 0, 0.35);
+}
+.timeline__night {
+  position: absolute;
+  left: 9px;
+  top: 0;
+  width: calc(100% - 18px);
+  height: 26px;
+  overflow: hidden;
+}
+.timeline__night rect {
+  fill: rgba(30, 41, 90, 0.075);
+}
+.timeline__buffer {
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  bottom: 9px;
+  height: 2px;
+  pointer-events: none;
+}
+.timeline__buffer span {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 1px;
+  transition: width var(--dur-base) var(--ease-out);
+}
+.timeline__buffer .is-loaded {
+  background: rgba(10, 122, 255, 0.4);
+}
+.timeline__buffer .is-loading {
+  background: repeating-linear-gradient(90deg, rgba(10, 122, 255, 0.35) 0 4px, transparent 4px 8px);
+  background-size: 16px 100%;
+  animation: buffer-move 0.8s linear infinite;
+}
+.timeline__buffer .is-missing {
+  background: rgba(60, 60, 67, 0.18);
+}
+@keyframes buffer-move {
+  to {
+    background-position: 16px 0;
+  }
+}
+/* "Now" glides continuously as the clock advances (the clock ticks every 30 s). */
+.timeline__now {
+  position: absolute;
+  bottom: 1px;
+  width: 2px;
+  height: 12px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: #e8262b;
+  transition: left 30s linear;
+}
+.timeline__now::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #e8262b;
+  animation: live 2s infinite;
+}
+.timeline__preview {
+  position: absolute;
+  top: -8px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: var(--surface-solid);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
+  font-size: 11.5px;
+  white-space: nowrap;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  transition: left 70ms var(--ease-out);
+  animation: preview-in var(--dur-fast) var(--ease-out);
+}
+.timeline__preview span {
+  color: var(--ink-3);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+@keyframes preview-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% + 4px));
+  }
+}
+.timeline__buffering {
+  opacity: 0.7;
 }
 .timeline__bubble {
   position: absolute;
@@ -1285,10 +1430,13 @@ a {
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.12s;
+  transition:
+    opacity 0.12s,
+    left var(--glide, 0ms);
 }
-.timeline__track:hover .timeline__bubble,
+.timeline__track:hover:not(.has-preview) .timeline__bubble,
 .timeline__track.is-dragging .timeline__bubble,
+.timeline__track.is-playing .timeline__bubble,
 .timeline__track:focus-within .timeline__bubble {
   opacity: 1;
 }
@@ -3004,5 +3152,231 @@ code {
   .v6-tab {
     top: auto;
     bottom: 230px;
+  }
+}
+
+/* ---------- motion polish ---------- */
+/* Panels and the assistant spring in, and slide away when closed (components keep themselves
+   mounted briefly via usePresence). */
+.panel-presence {
+  display: contents;
+}
+.panel {
+  animation: panel-in var(--dur-slow) var(--ease-out);
+}
+.chat {
+  animation: panel-in var(--dur-slow) var(--ease-out);
+}
+@keyframes panel-in {
+  from {
+    transform: translateX(28px) scale(0.985);
+    opacity: 0;
+  }
+}
+.panel-presence.is-closing .panel,
+.chat.is-closing {
+  pointer-events: none;
+  animation: panel-out 220ms var(--ease-in-out) forwards;
+}
+@keyframes panel-out {
+  to {
+    transform: translateX(24px) scale(0.985);
+    opacity: 0;
+  }
+}
+/* Panel content arrives in a short stagger. */
+.panel__body > * {
+  animation: rise-in var(--dur-slow) var(--ease-out) both;
+}
+.panel__body > :nth-child(2) { animation-delay: 35ms; }
+.panel__body > :nth-child(3) { animation-delay: 70ms; }
+.panel__body > :nth-child(4) { animation-delay: 105ms; }
+.panel__body > :nth-child(5) { animation-delay: 140ms; }
+.panel__body > :nth-child(n + 6) { animation-delay: 170ms; }
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.popover {
+  animation: pop-in var(--dur-base) var(--ease-out);
+}
+.layers-pop {
+  transform-origin: left top;
+}
+.timeline-pop,
+.cal-pop {
+  transform-origin: bottom center;
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(4px);
+  }
+}
+[data-tip]:hover::after {
+  animation: tip-in var(--dur-fast) var(--ease-out) 120ms both;
+}
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translate(-4px, -50%);
+  }
+}
+/* Controls: soft hover, tactile press. */
+.ctrl,
+.seg-vertical button,
+.ctrl-zoom button,
+.style-switch button,
+.icon-btn,
+.speed-btn,
+.live-btn,
+.btn,
+.chip {
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.ctrl:active:not(:disabled),
+.seg-vertical button:active,
+.ctrl-zoom button:active,
+.style-switch button:active,
+.icon-btn:active,
+.speed-btn:active,
+.live-btn:active,
+.btn:active,
+.chip:active {
+  transform: scale(0.94);
+}
+.switch {
+  transition: background-color var(--dur-base) var(--ease-out);
+}
+.switch__knob {
+  transition:
+    transform var(--dur-slow) var(--ease-spring),
+    width var(--dur-fast) var(--ease-out);
+}
+.switch:active .switch__knob {
+  width: 25px;
+}
+.switch[aria-checked='true']:active .switch__knob {
+  transform: translateX(13px);
+}
+.segmented button {
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+.layer-row {
+  transition: background-color var(--dur-base) var(--ease-out);
+}
+.layer-row:hover:not(.is-disabled) {
+  background: rgba(0, 0, 0, 0.035);
+}
+.layer-row__icon {
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    color var(--dur-base) var(--ease-out),
+    transform var(--dur-slow) var(--ease-spring);
+}
+.layer-row.is-on .layer-row__icon {
+  transform: scale(1.06);
+}
+.layer-rows--compact .layer-row {
+  padding: 5px 4px;
+}
+.popover__label--sub {
+  margin-top: 10px;
+}
+.legend {
+  animation: rise-in var(--dur-slow) var(--ease-out);
+}
+.legend__block {
+  animation: rise-in var(--dur-base) var(--ease-out) both;
+}
+.legend__bar {
+  transition: background var(--dur-slow) var(--ease-out);
+}
+.ai-fab {
+  transition:
+    transform var(--dur-base) var(--ease-spring),
+    box-shadow var(--dur-base) var(--ease-out),
+    filter var(--dur-base);
+  animation: rise-in var(--dur-slow) var(--ease-out) 200ms both;
+}
+.ai-fab:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px rgba(40, 20, 80, 0.42);
+}
+.ai-fab:active {
+  transform: translateY(0) scale(0.97);
+}
+.banner {
+  animation: banner-in var(--dur-slow) var(--ease-out);
+}
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+.toast {
+  animation: toast-in var(--dur-slow) var(--ease-spring);
+}
+/* Loading veil: the flame breathes, and the veil lifts instead of blinking out. */
+.veil svg {
+  animation: flame-breathe 1.6s var(--ease-in-out) infinite;
+  transform-origin: 50% 85%;
+}
+@keyframes flame-breathe {
+  50% {
+    transform: scale(1.08) rotate(-2deg);
+    filter: drop-shadow(0 0 10px rgba(255, 122, 26, 0.45));
+  }
+}
+.veil {
+  transition:
+    opacity 0.5s var(--ease-out),
+    transform 0.6s var(--ease-out);
+}
+.veil.is-done {
+  transform: scale(1.02);
+}
+.status-pill,
+.weather-chip,
+.scope-pill {
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    color var(--dur-base) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.status-pill:active {
+  transform: scale(0.96);
+}
+@media (max-width: 699px) {
+  /* Phones: panels and the assistant are bottom sheets — rise up, drop away. */
+  .panel,
+  .chat {
+    animation: sheet-in var(--dur-slow) var(--ease-out);
+  }
+  .panel-presence.is-closing .panel,
+  .chat.is-closing {
+    animation: sheet-out 220ms var(--ease-in-out) forwards;
+  }
+  @keyframes sheet-in {
+    from {
+      transform: translateY(48px);
+      opacity: 0;
+    }
+  }
+  @keyframes sheet-out {
+    to {
+      transform: translateY(60px);
+      opacity: 0;
+    }
   }
 }
