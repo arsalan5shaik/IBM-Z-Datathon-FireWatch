@@ -2,7 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { CalendarDays, ChevronLeft, ChevronRight, Info, Pause, Play, RotateCcw, TrendingUp, X } from 'lucide-react';
 import { cellsForPlace, riskIndex, seriesForCells, statewideShare } from '../state/lookups';
-import { effectiveIndex, getState, goLive, setState, setTimeIndex, stepTime, timelineOf, togglePlay, useStore } from '../state/store';
+import { riskHourStates } from '../state/data';
+import { effectiveIndex, getState, goLive, playbackTickMs, setState, setTimeIndex, stepTime, timelineOf, togglePlay, useStore, type Speed } from '../state/store';
+import { isNight } from '../lib/solar';
+import { motionOn } from '../map/motion';
 import { HOUR_MS, dayName, daySegments, formatHour, formatMonthDay, formatStamp, formatValidTime, formatWeekday, localParts, parseTime, relativeTime, tzAbbrev } from '../lib/time';
 import { scoreValue } from '../lib/risk';
 import { API_BASE } from '../config';
@@ -28,14 +31,17 @@ function useTrend(frames: number, start: number) {
       cells = cellsForPlace(risk, selection.place, highlight?.place.id === selection.place.id ? highlight.boundary : null);
       label = `Highest risk score in ${selection.place.name}`;
     }
-    if (cells?.length) return { values: seriesForCells(risk, cells, hours), label, absolute: true };
+    if (cells?.length) {
+      const values = seriesForCells(risk, cells, hours);
+      return { values, raw: values, label, absolute: true };
+    }
     // Backend mode only holds the area on screen, so a statewide trend would mislead.
     if (risk.metadata.sparse) return null;
     const share = statewideShare(risk);
     const md = risk.metadata;
     const values = hours.map((h) => share[Math.max(0, Math.min(md.frames - 1, Math.floor((h - Date.parse(md.forecast_start)) / (md.step_minutes * 60_000))))]);
     const max = Math.max(0.05, ...values);
-    return { values: values.map((v) => v / max), label, absolute: false };
+    return { values: values.map((v) => v / max), raw: values, label, absolute: false };
   }, [risk, selection, highlight, frames, start]);
 }
 
@@ -190,6 +196,61 @@ function CalendarPopover({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** Night hours at the map centre, as shaded bands behind the trend (sunset to sunrise). */
+function NightBands({ start, frames }: { start: number; frames: number }) {
+  const center = useStore((st) => st.map.center);
+  // Round the location so panning doesn't recompute every frame.
+  const lon = Math.round(center[0] * 2) / 2, lat = Math.round(center[1] * 2) / 2;
+  const bands = useMemo(() => {
+    // Continuous sunset → sunrise intervals sampled every 10 minutes (merged: no seams).
+    const out: { x: number; w: number }[] = [];
+    const steps = (frames - 1) * 6;
+    let from = -1;
+    for (let k = 0; k <= steps; k++) {
+      const night = isNight(lon, lat, start + k * 600_000);
+      if (night && from < 0) from = k;
+      if ((!night || k === steps) && from >= 0) {
+        out.push({ x: from / steps, w: (k - from) / steps });
+        from = -1;
+      }
+    }
+    return out;
+  }, [lon, lat, start, frames]);
+  return (
+    <svg className="timeline__night" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden>
+      {bands.map((b, k) => (
+        <rect key={k} x={b.x} y={0} width={b.w} height={1} />
+      ))}
+    </svg>
+  );
+}
+
+/** Backend mode: which hours of the visible area are loaded (like a video buffer bar). */
+function BufferBar({ frames, liveIndex }: { frames: number; liveIndex: number }) {
+  useStore((st) => st.risk.data);
+  useStore((st) => st.riskCoverage);
+  const states = riskHourStates();
+  if (!states) return null;
+  const segs: { from: number; to: number; state: number }[] = [];
+  for (let i = liveIndex; i < frames; i++) {
+    const st = states[i] ?? 0;
+    const last = segs[segs.length - 1];
+    if (last && last.state === st && last.to === i) last.to = i + 1;
+    else segs.push({ from: i, to: i + 1, state: st });
+  }
+  return (
+    <div className="timeline__buffer" aria-hidden>
+      {segs
+        .filter((sg) => sg.state)
+        .map((sg) => (
+          <span key={sg.from} className={`is-${sg.state === 2 ? 'loaded' : sg.state === 1 ? 'loading' : 'missing'}`} style={{ left: `${(sg.from / (frames - 1)) * 100}%`, width: `${(Math.min(sg.to - sg.from, frames - 1 - sg.from) / (frames - 1)) * 100}%` }} />
+        ))}
+    </div>
+  );
+}
+
+const SPEEDS: Speed[] = [1, 2, 4, 8, 16];
+
 export function Timeline() {
   const tl = useStore(useShallow((s) => timelineOf(s)));
   const idx = useStore((s) => effectiveIndex(s));
@@ -203,24 +264,54 @@ export function Timeline() {
   const riskLoading = useStore((s) => s.risk.state === 'loading' && !s.risk.data);
   const [infoOpen, setInfoOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [hover, setHover] = useState<number | null>(null);
+  const [buffering, setBuffering] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
   const t = tl.start + idx * HOUR_MS;
   const segments = useMemo(() => daySegments(tl.start, HOUR_MS, tl.frames), [tl.start, tl.frames]);
   const trend = useTrend(tl.frames, tl.start);
   const frac = (i: number) => i / Math.max(1, tl.frames - 1);
 
-  // Playback: advance one hour per tick, stop at the end of the forecast.
+  // Playback: advance one hour per tick, stop at the end of the forecast. In backend mode wait
+  // (buffering) while the next hour's visible tiles are still loading instead of stuttering.
   useEffect(() => {
-    if (!playing) return;
+    if (!playing) {
+      setBuffering(false);
+      return;
+    }
     const id = setInterval(() => {
       const s = getState();
       const cur = timelineOf(s);
       const i = effectiveIndex(s, cur);
-      if (i >= cur.frames - 1) setState({ playing: false });
-      else setTimeIndex(i + 1, { keepPlaying: true });
-    }, 420 / speed);
+      if (i >= cur.frames - 1) return setState({ playing: false });
+      const states = riskHourStates();
+      const wait = !!states && states[i + 1] === 1;
+      setBuffering(wait);
+      if (!wait) setTimeIndex(i + 1, { keepPlaying: true });
+    }, playbackTickMs(speed));
     return () => clearInterval(id);
   }, [playing, speed]);
+
+  // Trackpad / wheel scrubbing (non-passive so the page doesn't scroll).
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    let acc = 0;
+    const onWheel = (e: WheelEvent) => {
+      const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (!d) return;
+      e.preventDefault();
+      acc += d;
+      const steps = Math.trunc(acc / 40);
+      if (steps) {
+        acc -= steps * 40;
+        stepTime(steps);
+      }
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
   useEffect(() => {
     if (!infoOpen) return;
@@ -256,6 +347,19 @@ export function Timeline() {
       togglePlay();
     }
   };
+
+  const indexAt = (clientX: number) => {
+    const r = trackRef.current?.getBoundingClientRect();
+    if (!r || !r.width) return null;
+    const f = (clientX - r.left - 9) / Math.max(1, r.width - 18);
+    return Math.max(tl.liveIndex, Math.min(tl.frames - 1, Math.round(f * (tl.frames - 1))));
+  };
+  // The playhead glides between hours: linear over one tick while playing, eased on jumps,
+  // immediate while dragging.
+  const glide = !motionOn() || dragging ? '0ms' : playing ? `${Math.round(playbackTickMs(speed))}ms linear` : '260ms cubic-bezier(0.22, 1, 0.36, 1)';
+  const nowFrac = Math.max(0, Math.min(1, (now - tl.start) / HOUR_MS / Math.max(1, tl.frames - 1)));
+  const hoverT = hover != null ? tl.start + hover * HOUR_MS : 0;
+  const hoverValue = hover != null && trend ? trend.raw[hover] : NaN;
 
   const atEnd = idx >= tl.frames - 1;
   const hoursAhead = idx - tl.liveIndex;
@@ -295,7 +399,7 @@ export function Timeline() {
             className="speed-btn"
             aria-label={`Playback speed ${speed}×`}
             title="Playback speed"
-            onClick={() => setState({ speed: speed === 1 ? 2 : speed === 2 ? 4 : 1 })}
+            onClick={() => setState({ speed: SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length] })}
           >
             {speed}×
           </button>
@@ -317,13 +421,22 @@ export function Timeline() {
         <button type="button" className="play-btn" onClick={togglePlay} aria-label={playing ? 'Pause forecast playback' : atEnd ? 'Replay forecast from now' : 'Play forecast hour by hour'}>
           {playing ? <Pause size={18} fill="currentColor" /> : atEnd ? <RotateCcw size={18} /> : <Play size={18} fill="currentColor" />}
         </button>
-        <div className={`timeline__track${dragging ? ' is-dragging' : ''}`} style={{ ['--progress' as string]: frac(idx), ['--live' as string]: frac(tl.liveIndex) }}>
+        <div
+          ref={trackRef}
+          className={`timeline__track${dragging ? ' is-dragging' : ''}${playing ? ' is-playing' : ''}${hover != null && hover !== idx ? ' has-preview' : ''}`}
+          style={{ ['--progress' as string]: frac(idx), ['--live' as string]: frac(tl.liveIndex), ['--glide' as string]: glide }}
+          onPointerMove={(e) => setHover(indexAt(e.clientX))}
+          onPointerLeave={() => setHover(null)}
+        >
           <div className="timeline__rail" title={trend?.label}>
+            <NightBands start={tl.start} frames={tl.frames} />
             {trend && <Sparkline values={trend.values} />}
             {tl.liveIndex > 0 && <div className="timeline__past" style={{ width: pos(frac(tl.liveIndex)) }} />}
             {segments.slice(1).map((d) => (
               <span key={d.key} className="timeline__tick" style={{ left: pos(frac(d.startIndex)) }} />
             ))}
+            <BufferBar frames={tl.frames} liveIndex={tl.liveIndex} />
+            <span className="timeline__now" style={{ left: pos(nowFrac) }} title="Now" />
           </div>
           <input
             type="range"
@@ -340,9 +453,21 @@ export function Timeline() {
             onPointerUp={() => setDragging(false)}
             onBlur={() => setDragging(false)}
           />
+          <span className="timeline__thumb" style={{ left: pos(frac(idx)) }} aria-hidden />
           <div className="timeline__bubble" style={{ left: pos(frac(idx)) }} aria-hidden>
             {formatWeekday(t)} {formatHour(t)}
+            {buffering && <span className="timeline__buffering"> · loading</span>}
           </div>
+          {hover != null && hover !== idx && !dragging && (
+            <div className="timeline__preview" style={{ left: pos(frac(hover)) }} aria-hidden>
+              <strong>
+                {dayName(hoverT, now)} {formatHour(hoverT)}
+              </strong>
+              {Number.isFinite(hoverValue) && (
+                <span>{trend?.absolute ? `score ${scoreValue(hoverValue, scoreType)}` : `${Math.round(hoverValue * 100)}% of cells High+`}</span>
+              )}
+            </div>
+          )}
           <div className="timeline__days">
             {segments.map((d) => {
               const startI = Math.max(d.startIndex, tl.liveIndex);

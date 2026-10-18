@@ -1,5 +1,63 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { motionOn } from '../map/motion';
+
+/**
+ * Keep something mounted for `ms` after it closes so it can play an exit animation.
+ * Returns the value to render (the last open value while closing) and whether it is closing.
+ */
+export function usePresence<T>(value: T | null | false | undefined, ms = 220): { shown: T | null; closing: boolean } {
+  const last = useRef<T | null>(null);
+  const [closing, setClosing] = useState(false);
+  const open = value != null && value !== false;
+  if (open) last.current = value as T;
+  useEffect(() => {
+    if (open || !last.current) return setClosing(false);
+    if (!motionOn()) {
+      last.current = null;
+      return setClosing(false);
+    }
+    setClosing(true);
+    const t = setTimeout(() => {
+      last.current = null;
+      setClosing(false);
+    }, ms);
+    return () => clearTimeout(t);
+  }, [open, ms]);
+  return { shown: open ? (value as T) : closing ? last.current : null, closing: !open && closing };
+}
 import { riskColor, riskLabel, riskLevelKey } from '../lib/risk';
+
+/** Tween a number towards `target` (count-up on change). Respects reduced motion. */
+export function useAnimatedNumber(target: number, ms = 380): number {
+  const [value, setValue] = useState(target);
+  const from = useRef(target);
+  useEffect(() => {
+    const start = from.current;
+    if (!Number.isFinite(target) || !Number.isFinite(start) || start === target || !motionOn()) {
+      from.current = target;
+      setValue(target);
+      return;
+    }
+    const t0 = performance.now();
+    let id = 0;
+    const step = (now: number) => {
+      const k = Math.min(1, (now - t0) / ms);
+      const v = start + (target - start) * (1 - (1 - k) ** 3);
+      from.current = v;
+      setValue(v);
+      if (k < 1) id = requestAnimationFrame(step);
+    };
+    id = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(id);
+  }, [target, ms]);
+  return value;
+}
+
+/** A number that counts smoothly to new values, rendered through `format`. */
+export function AnimatedNumber({ value, format }: { value: number; format: (v: number) => ReactNode }) {
+  const v = useAnimatedNumber(value);
+  return <>{format(v)}</>;
+}
 
 export function Switch({ checked, onChange, label, id }: { checked: boolean; onChange: (v: boolean) => void; label: string; id?: string }) {
   return (

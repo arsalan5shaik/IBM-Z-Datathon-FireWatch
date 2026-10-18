@@ -47,7 +47,54 @@ function pill() {
   return imageData(c);
 }
 
-export function addIcons(map: MapLibreMap) {
+/**
+ * Expanding ring for fresh hotspots (StyleImageInterface). It repaints at ~24 fps only while the
+ * pulse layer is drawn and motion is allowed; otherwise it renders one static ring and lets the
+ * map go idle.
+ */
+function pulseImage(map: MapLibreMap, animate: () => boolean) {
+  const size = 72;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d', { willReadFrequently: true })!;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let lastDrawn = -1;
+  return {
+    width: size,
+    height: size,
+    data: new Uint8ClampedArray(size * size * 4),
+    render(this: { data: Uint8ClampedArray }) {
+      const on = animate();
+      const t = on ? (performance.now() % 1800) / 1800 : 0.55;
+      const frame = Math.round(t * 43);
+      if (frame === lastDrawn) {
+        if (on && !timer) timer = setTimeout(() => ((timer = undefined), map.triggerRepaint()), 42);
+        return false;
+      }
+      lastDrawn = frame;
+      ctx.clearRect(0, 0, size, size);
+      const r = 8 + t * 26;
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, r, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255, 196, 61, ${0.85 * (1 - t)})`;
+      ctx.lineWidth = 3.5 * (1 - t) + 1;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(size / 2, size / 2, r * 0.6, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 120, 30, ${0.18 * (1 - t)})`;
+      ctx.fill();
+      this.data = ctx.getImageData(0, 0, size, size).data;
+      if (on && !timer) timer = setTimeout(() => ((timer = undefined), map.triggerRepaint()), 42);
+      return true;
+    },
+    onRemove() {
+      clearTimeout(timer);
+    },
+  };
+}
+
+export function addIcons(map: MapLibreMap, animatePulse: () => boolean = () => true) {
+  if (!map.hasImage('fw-pulse')) map.addImage('fw-pulse', pulseImage(map, animatePulse), { pixelRatio: 2 });
   if (!map.hasImage('fw-arrow')) map.addImage('fw-arrow', windArrow(), { pixelRatio: PR, sdf: true });
   if (!map.hasImage('fw-pill'))
     map.addImage('fw-pill', pill(), {

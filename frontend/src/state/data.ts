@@ -12,7 +12,8 @@ import { setCountyShapes } from './lookups';
 import { coverageFromGroups, groupDetections } from '../lib/fireGroups';
 import { HOUR_MS, floorHour } from '../lib/time';
 import { SampleProvider } from '../mock/sampleProvider';
-import type { Explanation, WeatherGrid } from '../types';
+import type { CoverageCollection, Explanation, FireGroup, WeatherGrid } from '../types';
+import { compute } from '../lib/compute';
 import { getState, setState, toast, useStore, validTimeOf, type AppState, type Dataset } from './store';
 
 export const remote: RemoteProvider | null = API_BASE ? new RemoteProvider(API_BASE) : null;
@@ -126,11 +127,27 @@ export async function loadPlaces() {
 // ---- backend risk: on-demand tiles ---------------------------------------------------------
 type BBoxT = [number, number, number, number];
 /** Ask for the forecast cells covering the visible map at the selected hour (backend mode). */
+let lastView: BBoxT | null = null;
 export function requestRiskView(bbox: BBoxT, t: number) {
   if (!apiRisk()) return;
+  lastView = bbox;
   const coverage = remote!.requestView(bbox, t);
   if (getState().riskCoverage !== coverage) setState({ riskCoverage: coverage });
+  // A 25 % margin around the view loads in the background, so short pans reveal ready cells.
+  const [w, s, e, n] = bbox;
+  const mx = (e - w) * 0.25, my = (n - s) * 0.25;
+  if (coverage !== 'zoom-in') remote!.requestView([w - mx, s - my, e + mx, n + my], t, 20);
+  // Upcoming hours load quietly so stepping and playback don't wait on the network.
+  if (coverage === 'ok' || coverage === 'loading') remote!.prefetchHours(t, getState().playing ? 6 : 2);
 }
+/** Re-evaluate the visible area's coverage when tiles arrive (no new requests for loaded tiles). */
+function refreshCoverage() {
+  if (!lastView || !apiRisk()) return;
+  const coverage = remote!.requestView(lastView, validTimeOf(getState()));
+  if (getState().riskCoverage !== coverage) setState({ riskCoverage: coverage });
+}
+/** Per-hour load state of the visible forecast tiles (backend mode; null in sample mode). */
+export const riskHourStates = () => (apiRisk() ? remote!.hourStates() : null);
 /** A searched place may extend beyond the screen; allow more tiles for it. */
 export function requestRiskArea(bbox: BBoxT, t: number) {
   if (apiRisk()) remote!.requestView(bbox, t, 40);
@@ -139,16 +156,27 @@ export function requestCellHistory(cellId: string) {
   if (apiRisk()) remote!.requestHistory(cellId);
 }
 
-/** Recompute lookback-filtered detections, fire groups and illustrative coverage. */
+/**
+ * Recompute lookback-filtered detections, fire groups and illustrative coverage. Clustering and the
+ * influence contours run in the compute worker so a large hotspot refresh never stalls the map.
+ */
+let deriveSeq = 0;
 function derive() {
   const s = getState();
   const all = s.fires.data?.detections ?? [];
   const cutoff = s.now - s.lookbackHours * HOUR_MS;
   const detections = all.filter((d) => Date.parse(d.acquired_at) >= cutoff);
   const incidents = s.incidents.data?.incidents ?? [];
-  const groups = groupDetections(detections, incidents);
-  const coverage = s.coverageApi.data ?? coverageFromGroups(groups, detections);
-  setState({ derived: { detections, groups, coverage } });
+  const seq = ++deriveSeq;
+  const apiCoverage = s.coverageApi.data;
+  void compute<{ groups: FireGroup[]; coverage: CoverageCollection }>({ op: 'fires', detections, incidents })
+    .catch(() => {
+      const groups = groupDetections(detections, incidents);
+      return { groups, coverage: coverageFromGroups(groups, detections) };
+    })
+    .then(({ groups, coverage }) => {
+      if (seq === deriveSeq) setState({ derived: { detections, groups, coverage: apiCoverage ?? coverage } });
+    });
 }
 
 let started = false;
@@ -164,7 +192,10 @@ export function startData() {
   if (remote) {
     // Sparse backend grid updates as tiles arrive.
     remote.onRiskChange = (grid) => {
-      if (getState().risk.origin === 'api' && getState().risk.state === 'ready') setState((s) => ({ risk: { ...s.risk, data: grid, at: Date.now() } }));
+      if (getState().risk.origin === 'api' && getState().risk.state === 'ready') {
+        setState((s) => ({ risk: { ...s.risk, data: grid, at: Date.now() } }));
+        refreshCoverage();
+      }
     };
     // Backend weather is per hour: follow the timeline (debounced so playback doesn't flood the API).
     let timer = 0;

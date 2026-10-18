@@ -5,7 +5,7 @@ import { contextFor } from '../state/actions';
 import { chatMode, clearChat, clearChatContext, currentChatContext, sendChat } from '../state/chat';
 import { setState, useStore, validTimeOf } from '../state/store';
 import { formatStamp, parseTime } from '../lib/time';
-import { Markdown } from './ui';
+import { Markdown, usePresence } from './ui';
 import { ChatSources, safeSourceUrl } from './chat/ChatSources';
 
 const DATASET_LABEL: Record<string, string> = { risk: 'Risk forecast', weather: 'Weather', fires: 'Satellite hotspots', incidents: 'Incidents' };
@@ -37,6 +37,7 @@ export function ChatDrawer() {
   const input = useRef<HTMLTextAreaElement>(null);
   const mode = chatMode();
   const context = currentChatContext();
+  const presence = usePresence(open || null);
 
   useEffect(() => {
     if (open) setTimeout(() => input.current?.focus(), 50);
@@ -45,7 +46,7 @@ export function ChatDrawer() {
     list.current?.scrollTo({ top: list.current.scrollHeight, behavior: 'smooth' });
   }, [chat.messages.length, chat.pending]);
 
-  if (!open) return <ChatButton />;
+  if (!open && !presence.closing) return <ChatButton />;
 
   const ctxFromSelection = contextFor(selection);
   const showUseSelection = ctxFromSelection && ['placeId', 'cellId', 'detectionId', 'incidentId', 'groupId'].some(key =>
@@ -58,7 +59,7 @@ export function ChatDrawer() {
   };
 
   return (
-    <section className="chat" role="dialog" aria-modal="false" aria-label="FireWatch AI assistant">
+    <section className={`chat${presence.closing ? ' is-closing' : ''}`} role="dialog" aria-modal="false" aria-label="FireWatch AI assistant">
       <header className="chat__head">
         <span className="chat__logo">
           <Sparkles size={16} />

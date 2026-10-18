@@ -12,6 +12,7 @@ import { Toasts } from './components/Toasts';
 import { Banners } from './components/Banners';
 import { AboutDialog } from './components/AboutDialog';
 import { LoadingVeil } from './components/LoadingVeil';
+import { ReplayBar } from './components/ReplayBar';
 import { startData } from './state/data';
 import { restoreHashSelection, startHashSync } from './state/urlState';
 import { bindKeyboard } from './state/keyboard';
@@ -38,6 +39,7 @@ export function App() {
       <StyleSwitch />
       <Legend />
       <Timeline />
+      <ReplayBar />
       <DetailPanel />
       <ChatDrawer />
       <Toasts />

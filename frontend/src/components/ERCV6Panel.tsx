@@ -1,8 +1,10 @@
+import { useEffect, useRef, useState } from 'react';
+import { ChevronLeft, Minus } from 'lucide-react';
+import { API_BASE } from '../config';
 import { setState, useStore } from '../state/store';
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useAnimatedNumber } from './ui';
 
 const CELL = 'CA3K_X-0038_Y-0002';
-const ENDPOINT = `/api/v1/erc/cells/${CELL}`;
 
 type Prediction = {
   valid_date: string;
@@ -30,7 +32,17 @@ type Explanation = {
   }[];
 };
 
+/**
+ * Experimental V6 ERC-G forecast for one grid cell (Stockton), served by the FireWatch API.
+ * Without a configured backend (public sample demo) there is no V6 data, so the card stays hidden.
+ */
 export function ERCV6Panel() {
+  if (!API_BASE) return null;
+  return <ERCV6Card base={API_BASE} />;
+}
+
+function ERCV6Card({ base }: { base: string }) {
+  const endpoint = `${base}/erc/cells/${CELL}`;
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [selected, setSelected] = useState(0);
   const [explanation, setExplanation] = useState<Explanation | null>(null);
@@ -38,25 +50,29 @@ export function ERCV6Panel() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
   const chatOpen = useStore((state) => state.chatOpen);
+  const panelOpen = useStore((state) => !!state.selection);
   const [restoreChat, setRestoreChat] = useState(false);
+  const hadForecast = useRef(false);
+  const failed = useRef(false);
 
-  // Automatically hide V6 data while opening the chatbot.
+  // Step aside while the assistant or the details panel occupies the right side.
   useEffect(() => {
-    setExpanded(!chatOpen);
-  }, [chatOpen]);
+    // Without any V6 data the card stays a tab unless the user opens it.
+    setExpanded(!chatOpen && !panelOpen && (hadForecast.current || !failed.current));
+  }, [chatOpen, panelOpen]);
 
   useEffect(() => {
     let active = true;
 
     async function refresh() {
       try {
-        const response = await fetch(ENDPOINT, { cache: 'no-store' });
-        if (!response.ok) throw new Error(`Forecast API: HTTP ${response.status}`);
+        const response = await fetch(endpoint, { cache: 'no-store', headers: { Accept: 'application/json' } });
+        if (!response.ok) throw new Error(`Forecast API returned HTTP ${response.status}`);
+        if (!(response.headers.get('content-type') ?? '').includes('json')) throw new Error('The V6 forecast service is not available on this server');
         const data = (await response.json()) as Forecast;
         if (active) {
-          setForecast((previous) =>
-            previous?.snapshot_id === data.snapshot_id ? previous : data
-          );
+          hadForecast.current = true;
+          setForecast((previous) => (previous?.snapshot_id === data.snapshot_id ? previous : data));
           setError('');
           setLoading(false);
         }
@@ -64,6 +80,9 @@ export function ERCV6Panel() {
         if (active) {
           setError(err instanceof Error ? err.message : 'Forecast unavailable');
           setLoading(false);
+          // Never loaded: tuck the card away as a small tab instead of showing an error panel.
+          if (!hadForecast.current && !failed.current) setExpanded(false);
+          failed.current = true;
         }
       }
     }
@@ -74,9 +93,10 @@ export function ERCV6Panel() {
       active = false;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [endpoint]);
 
   const day = forecast?.predictions[selected];
+  const shown = useAnimatedNumber(day ? day.erc_g_display : NaN);
 
   useEffect(() => {
     if (!forecast || !day) return;
@@ -89,7 +109,7 @@ export function ERCV6Panel() {
       snapshot_id: forecast.snapshot_id,
     });
 
-    fetch(`${ENDPOINT}/explain?${params}`, { signal: controller.signal })
+    fetch(`${endpoint}/explain?${params}`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error(`SHAP HTTP ${response.status}`);
         return response.json() as Promise<Explanation>;
@@ -104,32 +124,14 @@ export function ERCV6Panel() {
       });
 
     return () => controller.abort();
-  }, [forecast, day]);
-
-  const panelStyle: CSSProperties = {
-    position: 'fixed',
-    top: 175,
-    right: 18,
-    zIndex: 900,
-    width: 310,
-    maxWidth: 'calc(100vw - 36px)',
-    maxHeight: 'calc(100vh - 195px)',
-    overflowY: 'auto',
-    background: '#111d2b',
-    color: '#f1f5f9',
-    border: '1px solid #334155',
-    borderRadius: 14,
-    boxShadow: '0 12px 38px #0008',
-    padding: 16,
-    fontFamily: 'Inter, system-ui, sans-serif',
-    fontSize: 13,
-  };
+  }, [forecast, day, endpoint]);
 
   function openV6() {
     if (chatOpen) {
       setRestoreChat(true);
       setState({ chatOpen: false });
     }
+    if (panelOpen) setState({ selection: null });
     setExpanded(true);
   }
 
@@ -143,178 +145,87 @@ export function ERCV6Panel() {
 
   if (!expanded) {
     return (
-      <button
-        type="button"
-        aria-label="Open FireWatch V6 data"
-        aria-expanded={false}
-        onClick={openV6}
-        style={{
-          position: 'fixed',
-          top: 245,
-          right: 0,
-          zIndex: 1200,
-          background: '#f97316',
-          color: '#fff',
-          padding: '14px 7px',
-          border: 'none',
-          borderRadius: '9px 0 0 9px',
-          fontWeight: 800,
-          fontSize: 11,
-          cursor: 'pointer',
-          boxShadow: '0 5px 20px #0005',
-          writingMode: 'vertical-rl',
-        }}
-      >
-        V6 DATA ◀
+      <button type="button" className={`v6-tab${error ? ' is-error' : ''}`} aria-label={error && !forecast ? 'FireWatch V6 data unavailable — show details' : 'Open FireWatch V6 data'} title={error && !forecast ? 'V6 forecast unavailable' : undefined} aria-expanded={false} onClick={openV6}>
+        <ChevronLeft size={14} aria-hidden />
+        <span>V6 ERC-G</span>
       </button>
     );
   }
 
+  const features = explanation ? [...explanation.features].sort((a, b) => Math.abs(b.shap_value) - Math.abs(a.shap_value)).slice(0, 6) : [];
+  const maxShap = Math.max(0.01, ...features.map((f) => Math.abs(f.shap_value)));
+
   return (
-    <aside style={panelStyle} aria-label="Experimental Stockton ERC-G forecast">
-      <button
-        type="button"
-        onClick={closeV6}
-        style={{
-          width: '100%',
-          background: 'transparent',
-          border: 'none',
-          color: '#fb923c',
-          fontWeight: 800,
-          cursor: 'pointer',
-          textAlign: 'left',
-          padding: 0,
-        }}
-      >
-        FIREWATCH V6 · {expanded ? 'MINIMIZE −' : 'EXPAND +'}
-      </button>
-      {expanded && (<>
+    <aside className="v6" aria-label="Experimental Stockton ERC-G forecast">
+      <header className="v6__head">
+        <span className="v6__eyebrow">FireWatch V6 · experimental</span>
+        <button type="button" className="icon-btn icon-btn--sm" aria-label="Minimize V6 data" onClick={closeV6}>
+          <Minus size={15} />
+        </button>
+      </header>
+      <h3 className="v6__title">Stockton, CA</h3>
+      <p className="v6__sub">Daily ERC-G · one grid cell · not a fire probability</p>
 
-      <h3 style={{ margin: '8px 0 4px', fontSize: 19 }}>
-        Stockton, CA
-      </h3>
-
-      <p style={{ color: '#94a3b8', fontSize: 11, marginTop: 0 }}>
-        Experimental daily ERC-G · One grid cell · Not fire probability
-      </p>
-
-      {loading && <p>Loading live forecasts...</p>}
-      {error && <p style={{ color: '#fca5a5' }}>{error}</p>}
+      {loading && (
+        <div className="v6__skeleton" aria-label="Loading V6 forecast">
+          <span />
+          <span />
+          <span />
+        </div>
+      )}
+      {error && !forecast && <p className="v6__error">V6 forecast unavailable. {error}.</p>}
 
       {forecast && (
         <>
-          <div style={{
-            display: 'flex',
-            gap: 5,
-            margin: '14px 0',
-            flexWrap: 'wrap',
-          }}>
+          <div className="v6__days" role="tablist" aria-label="Forecast day">
             {forecast.predictions.map((item, index) => (
-              <button
-                key={item.valid_date}
-                type="button"
-                onClick={() => setSelected(index)}
-                style={{
-                  flex: 1,
-                  minWidth: 35,
-                  padding: '9px 2px',
-                  borderRadius: 7,
-                  cursor: 'pointer',
-                  background: selected === index ? '#f97316' : '#28384b',
-                  color: 'white',
-                  border: 'none',
-                }}
-              >
+              <button key={item.valid_date} type="button" role="tab" aria-selected={selected === index} className={selected === index ? 'is-active' : ''} onClick={() => setSelected(index)}>
                 D{item.lead_day}
               </button>
             ))}
           </div>
 
           {day && (
-            <div style={{
-              background: '#1c2b3d',
-              borderRadius: 10,
-              padding: 14,
-            }}>
-              <div style={{ color: '#cbd5e1' }}>
-                {day.valid_date}
-              </div>
-
-              <div style={{
-                fontSize: 36,
-                fontWeight: 800,
-                color: '#fb923c',
-              }}>
-                {day.erc_g_display.toFixed(2)}
-              </div>
-
-              <div style={{ color: '#94a3b8' }}>
-                ERC-G index · Daily estimate
-              </div>
+            <div className="v6__value">
+              <div className="v6__date">{day.valid_date}</div>
+              <div className="v6__number">{Number.isFinite(shown) ? shown.toFixed(2) : '–'}</div>
+              <div className="v6__caption">ERC-G index · daily estimate</div>
             </div>
           )}
 
-          <h4 style={{ marginBottom: 8 }}>
-            Model explanation (TreeSHAP)
-          </h4>
-
+          <h4 className="v6__h4">Model explanation (TreeSHAP)</h4>
           {!explanation && (
-            <p style={{ color: '#94a3b8' }}>
-              Loading explanation...
-            </p>
+            <div className="v6__skeleton v6__skeleton--rows" aria-label="Loading explanation">
+              <span />
+              <span />
+              <span />
+              <span />
+            </div>
           )}
+          {features.map((feature) => {
+            const up = feature.shap_value >= 0;
+            return (
+              <div key={feature.name} className="v6__shap">
+                <span className="v6__shap-name">{feature.name.replaceAll('_', ' ')}</span>
+                <span className="v6__shap-track" aria-hidden>
+                  <span className={`v6__shap-bar ${up ? 'is-up' : 'is-down'}`} style={{ width: `${(Math.abs(feature.shap_value) / maxShap) * 100}%` }} />
+                </span>
+                <strong className={up ? 'is-up' : 'is-down'}>
+                  {up ? '+' : ''}
+                  {feature.shap_value.toFixed(2)}
+                </strong>
+              </div>
+            );
+          })}
 
-          {explanation &&
-            [...explanation.features]
-              .sort((a, b) =>
-                Math.abs(b.shap_value) - Math.abs(a.shap_value)
-              )
-              .slice(0, 6)
-              .map((feature) => (
-                <div
-                  key={feature.name}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    gap: 10,
-                    margin: '9px 0',
-                  }}
-                >
-                  <span>{feature.name.replaceAll('_', ' ')}</span>
-
-                  <strong style={{
-                    color: feature.shap_value >= 0
-                      ? '#fda4af'
-                      : '#93c5fd',
-                  }}>
-                    {feature.shap_value > 0 ? '+' : ''}
-                    {feature.shap_value.toFixed(2)}
-                  </strong>
-                </div>
-              ))}
-
-          <div style={{
-            borderTop: '1px solid #334155',
-            marginTop: 14,
-            paddingTop: 10,
-            color: '#94a3b8',
-            fontSize: 10,
-          }}>
-            Weather retrieved: {
-              new Date(forecast.retrieved_at_utc).toLocaleString()
-            }
-
+          <footer className="v6__foot">
+            <div>Weather retrieved: {new Date(forecast.retrieved_at_utc).toLocaleString()}</div>
             <div>Snapshot: {forecast.snapshot_id}</div>
             <div>Frozen model: {forecast.model_version}</div>
-
-            <div style={{ marginTop: 6 }}>
-              Experimental estimate. Forecast accuracy and
-              danger thresholds not validated.
-            </div>
-          </div>
+            <div className="v6__note">Experimental estimate. Forecast accuracy and danger thresholds not validated.</div>
+          </footer>
         </>
       )}
-      </>)}
     </aside>
   );
 }
