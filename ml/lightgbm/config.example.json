@@ -1,0 +1,17 @@
+{
+  "grid": "../weather_elevation/data/california_grid_numeric_id.geojson",
+  "elevation": "../weather_elevation/data/california_elevation_minmax_3km.csv",
+  "crosswalk": "data/grid_id_mapping.csv",
+  "erc": {"path": "data/erc_daily.csv", "id_namespace": "authoritative"},
+  "weather": {"path": "data/weather_daily.csv", "id_namespace": "authoritative"},
+  "vegetation": {"path": "data/vegetation.csv", "id_namespace": "authoritative"},
+  "weather_features": ["temperature_2m_max", "temperature_2m_min", "relative_humidity_2m_min", "precipitation_sum", "wind_speed_10m_max", "wind_gusts_10m_max"],
+  "vegetation_features": ["vegetation_fraction"],
+  "feature_units": {"temperature_2m_max": "degC", "temperature_2m_min": "degC", "relative_humidity_2m_min": "%", "precipitation_sum": "mm/day", "wind_speed_10m_max": "m/s", "wind_gusts_10m_max": "m/s", "vegetation_fraction": "fraction_0_to_1"},
+  "weather_lag_days": 1,
+  "target_definition": "historical_daily_erc_fuel_model_G",
+  "date_convention": "gridMET label day (07:00 UTC to next 07:00 UTC); weather must use the same day windows",
+  "validation_start": "2024-07-24",
+  "test_start": "2024-07-26",
+  "parameters": {"n_estimators": 300, "learning_rate": 0.05, "num_leaves": 15, "min_child_samples": 50, "reg_lambda": 1.0, "n_jobs": 4}
+}
