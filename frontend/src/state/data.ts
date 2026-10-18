@@ -12,7 +12,8 @@ import { setCountyShapes } from './lookups';
 import { coverageFromGroups, groupDetections } from '../lib/fireGroups';
 import { HOUR_MS, floorHour } from '../lib/time';
 import { SampleProvider } from '../mock/sampleProvider';
-import type { Explanation, WeatherGrid } from '../types';
+import type { CoverageCollection, Explanation, FireGroup, WeatherGrid } from '../types';
+import { compute } from '../lib/compute';
 import { getState, setState, toast, useStore, validTimeOf, type AppState, type Dataset } from './store';
 
 export const remote: RemoteProvider | null = API_BASE ? new RemoteProvider(API_BASE) : null;
@@ -139,16 +140,27 @@ export function requestCellHistory(cellId: string) {
   if (apiRisk()) remote!.requestHistory(cellId);
 }
 
-/** Recompute lookback-filtered detections, fire groups and illustrative coverage. */
+/**
+ * Recompute lookback-filtered detections, fire groups and illustrative coverage. Clustering and the
+ * influence contours run in the compute worker so a large hotspot refresh never stalls the map.
+ */
+let deriveSeq = 0;
 function derive() {
   const s = getState();
   const all = s.fires.data?.detections ?? [];
   const cutoff = s.now - s.lookbackHours * HOUR_MS;
   const detections = all.filter((d) => Date.parse(d.acquired_at) >= cutoff);
   const incidents = s.incidents.data?.incidents ?? [];
-  const groups = groupDetections(detections, incidents);
-  const coverage = s.coverageApi.data ?? coverageFromGroups(groups, detections);
-  setState({ derived: { detections, groups, coverage } });
+  const seq = ++deriveSeq;
+  const apiCoverage = s.coverageApi.data;
+  void compute<{ groups: FireGroup[]; coverage: CoverageCollection }>({ op: 'fires', detections, incidents })
+    .catch(() => {
+      const groups = groupDetections(detections, incidents);
+      return { groups, coverage: coverageFromGroups(groups, detections) };
+    })
+    .then(({ groups, coverage }) => {
+      if (seq === deriveSeq) setState({ derived: { detections, groups, coverage: apiCoverage ?? coverage } });
+    });
 }
 
 let started = false;

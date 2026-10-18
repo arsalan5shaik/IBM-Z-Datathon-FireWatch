@@ -3,6 +3,7 @@ import { API_BASE } from '../config';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type { Feature, MultiPolygon, Polygon } from 'geojson';
 import { loadJson, saveJson } from '../lib/storage';
+import type { PaletteKey } from '../lib/palette';
 import { HOUR_MS, floorHour } from '../lib/time';
 import type {
   BasemapStyle,
@@ -64,6 +65,8 @@ export interface Toast {
   kind: 'info' | 'error' | 'success';
 }
 
+export type StatewideView = 'surface' | 'coarse' | 'cells';
+
 export interface Prefs {
   basemap: BasemapStyle;
   view: ViewMode;
@@ -72,6 +75,18 @@ export interface Prefs {
   lookbackHours: number;
   units: Units;
   legendCollapsed: boolean;
+  /** In-app motion switch (the OS reduced-motion setting always wins). */
+  smoothMotion: boolean;
+  /** How the sample forecast is drawn at statewide zoom. */
+  statewideView: StatewideView;
+  /** 3D: raise risk cells by score. */
+  skyline: boolean;
+  /** Day/night shading for the selected hour. */
+  dayNight: boolean;
+  /** Risk colour ramp (colour-vision-deficiency-safe option). */
+  palette: PaletteKey;
+  /** Animated streaks travelling downwind (with the wind layer). */
+  windFlow: boolean;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -82,6 +97,12 @@ export const DEFAULT_PREFS: Prefs = {
   lookbackHours: 24,
   units: 'us',
   legendCollapsed: typeof window !== 'undefined' && window.innerWidth < 640,
+  smoothMotion: true,
+  statewideView: 'surface',
+  skyline: false,
+  dayNight: false,
+  palette: 'default',
+  windFlow: true,
 };
 
 export interface MapInfo {
@@ -95,12 +116,32 @@ export interface MapInfo {
   center: [number, number];
 }
 
+export interface Replay {
+  /** Window being replayed (epoch ms). */
+  from: number;
+  to: number;
+  /** Current replay clock. */
+  at: number;
+  playing: boolean;
+}
+export interface TourStop {
+  lngLat: [number, number];
+  label: string;
+  score: number;
+  t: number;
+  cellId?: string;
+}
+
+export type Speed = 1 | 2 | 4 | 8 | 16;
+
 export interface AppState extends Prefs {
   now: number;
   timeIndex: number;
   isLive: boolean;
   playing: boolean;
-  speed: 1 | 2 | 4;
+  speed: Speed;
+  replay: Replay | null;
+  tour: { stops: TourStop[]; index: number; paused: boolean } | null;
 
   selection: Selection | null;
   highlight: { place: PlaceResult; boundary: Feature<Polygon | MultiPolygon> | null } | null;
@@ -140,6 +181,8 @@ export const useStore = create<AppState>()(
     isLive: true,
     playing: false,
     speed: 1,
+    replay: null,
+    tour: null,
 
     selection: null,
     highlight: null,
@@ -173,7 +216,21 @@ export const setState = useStore.setState;
 
 // Persist preferences.
 useStore.subscribe(
-  (s) => ({ basemap: s.basemap, view: s.view, layers: s.layers, riskOpacity: s.riskOpacity, lookbackHours: s.lookbackHours, units: s.units, legendCollapsed: s.legendCollapsed }),
+  (s): Prefs => ({
+    basemap: s.basemap,
+    view: s.view,
+    layers: s.layers,
+    riskOpacity: s.riskOpacity,
+    lookbackHours: s.lookbackHours,
+    units: s.units,
+    legendCollapsed: s.legendCollapsed,
+    smoothMotion: s.smoothMotion,
+    statewideView: s.statewideView,
+    skyline: s.skyline,
+    dayNight: s.dayNight,
+    palette: s.palette,
+    windFlow: s.windFlow,
+  }),
   (prefs) => saveJson('prefs', prefs),
   { equalityFn: (a, b) => JSON.stringify(a) === JSON.stringify(b) },
 );
@@ -232,6 +289,9 @@ export const stepTime = (deltaHours: number) => {
   const s = getState();
   setTimeIndex(effectiveIndex(s) + deltaHours);
 };
+/** Milliseconds per playback step at a speed (1× = 420 ms per forecast hour). */
+export const playbackTickMs = (speed: Speed) => 420 / speed;
+
 export const goLive = () => setState({ isLive: true, playing: false, timeIndex: timelineOf(getState()).liveIndex });
 export function togglePlay() {
   const s = getState();
@@ -252,6 +312,8 @@ export function clearSelection() {
 }
 export function closeOverlays(): boolean {
   const s = getState();
+  if (s.tour) return (setState({ tour: null }), true);
+  if (s.replay) return (setState({ replay: null }), true);
   if (s.shortcutsOpen) return (setState({ shortcutsOpen: false }), true);
   if (s.aboutOpen) return (setState({ aboutOpen: false }), true);
   if (s.calendarOpen) return (setState({ calendarOpen: false }), true);
