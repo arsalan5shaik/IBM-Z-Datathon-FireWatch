@@ -140,22 +140,37 @@ administrators can read runtime environment; this is not a secret vault.
 | `FIRMS_REFRESH_MINUTES` | 15 default; settings validate 10..1440 |
 | `FIRMS_SOURCES` | Both NOAA-20 and NOAA-21, explicit JSON in Compose |
 | `SHARED_DATA_DIR` / `SQLITE_PATH` | `/data` / `/data/firewatch.sqlite3` |
-| `OPENAI_API_KEY`, `LLM_API_KEY`, `CHAT_PROXY_TOKEN` | Explicitly empty in this deployment |
-| `CHAT_ACCESS_MODE` | `trusted_proxy` with no token; backend fails closed |
+| `OPENAI_API_KEY`, `CHAT_PROXY_TOKEN` | Empty by default (chat blocked); set both to enable chat |
+| `LLM_API_KEY` | Explicitly empty in this deployment |
+| `CHAT_ACCESS_MODE` | `trusted_proxy`; without a token nginx and the backend fail closed |
 | `CORS_ORIGINS` | `[]`; same-origin proxy routing |
 
 Settings do not currently implement `_FILE` secrets. Docker secrets cannot simply
 be mapped to `OPENAI_API_KEY_FILE` or `NASA_FIRMS_MAP_KEY_FILE` without additional
 reviewed application/entrypoint support.
 
-The existing chatbot requires an authenticated trusted gateway for public use.
-Nginx here provides routing, **not user authentication**, and strips the chat auth
-and forwarding headers. All chat paths are blocked, and no paid API key is injected.
-CORS does not authenticate users. Enabling public chat requires a separate reviewed
-gateway that authenticates users, strips client-supplied auth headers, injects a
-32+ character server-only proxy token, restricts direct API access, enforces HTTPS,
-and applies shared quotas if using multiple hosts. Preserve body limits and review
-trusted proxy sources. Never put that token or an OpenAI key in Vite variables.
+The chatbot only accepts requests carrying the server-only proxy token. By default
+`CHAT_PROXY_TOKEN` is empty, nginx answers 403 for every chat path and no paid API
+key is injected. To enable chat, set in `deploy/.env`:
+
+```bash
+CHAT_PROXY_TOKEN=<output of: openssl rand -hex 32>   # 32+ chars of [A-Za-z0-9_-]
+OPENAI_API_KEY=<backend-only key>
+```
+
+At startup `deploy/nginx-entrypoint.sh` then renders an exact `/api/v1/chat`
+route that overwrites `X-FireWatch-Chat-Auth` with the token, so a browser can
+neither read nor forge it. An invalid token stops the frontend container instead
+of silently disabling chat. Other chat path variants stay blocked, and the backend
+port remains unpublished.
+
+Nginx is the trusted gateway, **not user authentication**: anyone who can reach
+port 8080 can use chat, bounded only by the backend quotas. Before exposing it
+(e.g. a Cloudflare tunnel), put an access-controlled HTTPS edge in front, such as
+Cloudflare Access on a named tunnel; quick `trycloudflare.com` tunnels cannot
+enforce access. Behind nginx every caller shares one client address, so the
+per-client rate limit acts as a shared one. CORS does not authenticate users.
+Never put the token or an OpenAI key in Vite variables.
 
 ## Data, health and provider failures
 

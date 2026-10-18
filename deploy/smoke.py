@@ -26,6 +26,8 @@ def main():
         FIREWATCH_BIND_ADDRESS="127.0.0.1",
         FIREWATCH_PORT=str(args.port),
         NASA_FIRMS_MAP_KEY="",
+        CHAT_PROXY_TOKEN="",
+        OPENAI_API_KEY="",
         COMPOSE_PROFILES="",
     )
     project = "firewatch-smoke-" + args.platform.split("/")[1]
