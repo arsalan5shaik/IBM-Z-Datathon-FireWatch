@@ -12,7 +12,11 @@ if [ -z "$token" ]; then
     echo 'location = /api/v1/chat { return 403; }' > "$conf"
 else
     # The backend requires 32+ characters; the charset keeps the value inert in nginx syntax.
-    if [ "${#token}" -lt 32 ] || ! printf '%s' "$token" | grep -Eq '^[A-Za-z0-9_-]+$'; then
+    # A case pattern checks every character, newlines included (grep matches per line).
+    case "$token" in
+        *[!A-Za-z0-9_-]*) token= ;;
+    esac
+    if [ "${#token}" -lt 32 ]; then
         echo 'CHAT_PROXY_TOKEN must be 32+ characters of [A-Za-z0-9_-] (try: openssl rand -hex 32)' >&2
         exit 1
     fi
