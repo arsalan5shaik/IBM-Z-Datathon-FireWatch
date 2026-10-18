@@ -1,0 +1,73 @@
+name: Docker LinuxONE
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['backend/**', 'frontend/**', 'deploy/**', 'compose.yaml', '.dockerignore', '.github/workflows/docker-linuxone.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  containers:
+    name: build and smoke (${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, s390x]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+        if: matrix.arch == 's390x'
+        with:
+          platforms: s390x
+      - name: Validate Dockerfiles and Compose
+        run: |
+          docker compose --env-file deploy/.env.example config --quiet
+          docker buildx build --check --platform linux/${{ matrix.arch }} -f backend/Dockerfile .
+          docker buildx build --check --platform linux/${{ matrix.arch }} -f frontend/Dockerfile .
+      - name: Build runtime images (no registry push)
+        run: |
+          printf '%s\n' 'OPENAI_API_KEY=FIREWATCH_DOCKER_EXCLUSION_CANARY' > backend/.env
+          printf '%s\n' 'OPENAI_API_KEY=FIREWATCH_DOCKER_EXCLUSION_CANARY' > frontend/.env
+          docker buildx build --platform linux/${{ matrix.arch }} --target runtime --load -f backend/Dockerfile -t firewatch-backend:${{ matrix.arch }} .
+          docker buildx build --platform linux/${{ matrix.arch }} --target runtime --load -f frontend/Dockerfile -t firewatch-frontend:${{ matrix.arch }} .
+      - name: Inspect every runtime-image layer for excluded secrets and local state
+        run: |
+          python3 deploy/audit_image.py firewatch-backend:${{ matrix.arch }} --canary FIREWATCH_DOCKER_EXCLUSION_CANARY
+          python3 deploy/audit_image.py firewatch-frontend:${{ matrix.arch }} --canary FIREWATCH_DOCKER_EXCLUSION_CANARY
+      - name: Compose lifecycle, network, persistence and security smoke (no provider keys)
+        run: python3 deploy/smoke.py --platform linux/${{ matrix.arch }} --tag ${{ matrix.arch }}
+      - name: Build locked backend test image
+        run: docker buildx build --platform linux/${{ matrix.arch }} --target test --load -f backend/Dockerfile -t firewatch-backend-test:${{ matrix.arch }} .
+      - name: Backend suite on target architecture (mock transports)
+        run: docker run --rm --platform linux/${{ matrix.arch }} --network none firewatch-backend-test:${{ matrix.arch }}
+      - name: Backend lint and format
+        if: matrix.arch == 'amd64'
+        run: |
+          docker run --rm --network none firewatch-backend-test:amd64 python -m ruff check --no-cache .
+          docker run --rm --network none firewatch-backend-test:amd64 python -m ruff format --no-cache --check .
+          docker run --rm --network none -v "$PWD/deploy:/review:ro" firewatch-backend-test:amd64 python -m ruff check --no-cache --config /app/backend/pyproject.toml /review
+          docker run --rm --network none -v "$PWD/deploy:/review:ro" firewatch-backend-test:amd64 python -m ruff format --no-cache --check --config /app/backend/pyproject.toml /review
+      - name: Backend subprocess smoke
+        if: matrix.arch == 'amd64'
+        run: |
+          docker run --rm firewatch-backend-test:amd64 python scripts/smoke.py
+          docker run --rm firewatch-backend-test:amd64 python scripts/smoke.py --fixtures
+
+  frontend-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build locked test environment
+        run: docker buildx build --target test --load -f frontend/Dockerfile -t firewatch-frontend-test:ci .
+      - name: Frontend unit tests (existing failures remain visible)
+        run: docker run --rm --network none firewatch-frontend-test:ci
