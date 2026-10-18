@@ -132,6 +132,9 @@ class ChatTools:
             or result.get("metadata", {}).get("cache_status")
             or result.get("status")
         )
+        if result.get("metadata", {}).get("stale"):
+            freshness = "stale"
+            self.limitations.append(f"{name} data is stale")
         self.sources[key] = ChatSource(
             id=key,
             kind="firewatch",
@@ -141,6 +144,9 @@ class ChatTools:
             valid_at=valid,
             freshness=freshness,
             scope=self.location.display_name if self.location else "California",
+            fetched_at=result.get("fetched_at"),
+            generated_at=result.get("generated_at"),
+            sampling_coordinates=result.get("sampling_coordinates"),
         )
         self.evidence[key] = result
         return result | {"source_id": key}

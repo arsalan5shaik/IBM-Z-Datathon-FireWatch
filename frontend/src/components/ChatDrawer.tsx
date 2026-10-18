@@ -48,7 +48,8 @@ export function ChatDrawer() {
   if (!open) return <ChatButton />;
 
   const ctxFromSelection = contextFor(selection);
-  const showUseSelection = ctxFromSelection && ctxFromSelection.label !== chat.context?.label;
+  const showUseSelection = ctxFromSelection && ['placeId', 'cellId', 'detectionId', 'incidentId', 'groupId'].some(key =>
+    ctxFromSelection[key as keyof typeof ctxFromSelection] !== context?.[key as keyof typeof ctxFromSelection]);
   const submit = (q?: string) => {
     const value = (q ?? text).trim();
     if (!value) return;
@@ -132,7 +133,7 @@ export function ChatDrawer() {
         )}
       </div>
 
-      {!chat.pending && chat.messages.length < 2 && (
+      {!chat.pending && (chat.messages.length < 2 || !!chat.messages.at(-1)?.suggested_questions?.length) && (
         <div className="chat__suggest">
           {(chat.messages.at(-1)?.suggested_questions?.length ? chat.messages.at(-1)!.suggested_questions! : suggestions(!!context)).map((q) => (
             <button key={q} type="button" onClick={() => submit(q)}>

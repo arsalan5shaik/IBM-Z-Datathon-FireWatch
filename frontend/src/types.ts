@@ -265,6 +265,9 @@ export interface ChatSource {
   valid_at?: string | null;
   freshness?: string | null;
   scope?: string | null;
+  fetched_at?: string | null;
+  generated_at?: string | null;
+  sampling_coordinates?: [number, number] | null;
 }
 
 // ---- UI ------------------------------------------------------------------------

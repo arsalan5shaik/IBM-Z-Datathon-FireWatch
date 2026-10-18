@@ -24,29 +24,42 @@ const store = async () => page.evaluate(async () => {
   return { messages: s.chat.messages, context: s.chat.context, pending: s.chat.pending,
     location: s.highlight?.place.id, hour: new Date(validTimeOf(s)).toISOString() };
 });
+async function waitState(predicate, timeout = 90_000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const state = await store();
+    if (predicate(state)) return state;
+    await page.waitForTimeout(100);
+  }
+  throw new Error('Timed out waiting for actual application state');
+}
 async function select(query, id) {
   await page.getByRole('combobox').fill(query);
   await page.getByRole('option').filter({ hasText: query }).first().click();
-  await page.waitForFunction(async expected => (await import('/src/state/store.ts')).getState().highlight?.place.id === expected, id);
+  await waitState(s => s.location === id);
 }
 async function ask(text) {
   const before = (await store()).messages.length;
   await page.getByRole('textbox', { name: 'Message FireWatch AI' }).fill(text);
   await page.getByRole('textbox', { name: 'Message FireWatch AI' }).press('Enter');
-  await page.waitForFunction(async old => {
-    const s = (await import('/src/state/store.ts')).getState();
-    return !s.chat.pending && s.chat.messages.length > old + 1;
-  }, before, { timeout: 90_000 });
-  return (await store()).messages.at(-1);
+  const state = await waitState(s => !s.pending && s.messages.length > before + 1);
+  return state.messages.at(-1);
+}
+async function openChat() {
+  const launcher = page.getByRole('button', { name: 'Ask FireWatch AI', exact: true });
+  if (await launcher.isVisible()) await launcher.click();
+  else await page.getByRole('button', { name: 'Ask AI about this area', exact: true }).click();
+  // The panel's existing contextual action may also submit a suggested question.
+  await waitState(s => !s.pending);
 }
 try {
   await page.goto(`${ui}?api=${encodeURIComponent(realApi)}`, { waitUntil: 'domcontentloaded' });
   await select('Stockton', 'place-ca-stockton');
-  await page.getByRole('button', { name: 'Ask FireWatch AI', exact: true }).click();
+  await openChat();
   assert.match((await ask('What is the weather tomorrow?')).content, /OPENAI_API_KEY/);
   assert.equal((await store()).messages.at(-1).mode, 'error');
-  await page.getByRole('button', { name: 'Retry message', exact: true }).click();
-  await page.waitForFunction(async () => !(await import('/src/state/store.ts')).getState().chat.pending);
+  await page.getByRole('button', { name: 'Retry message', exact: true }).last().click();
+  await waitState(s => !s.pending);
   await page.screenshot({ path: path.join(output, 'key-missing-desktop.png') });
   results.steps.push({ name: 'Real backend: missing-key error and retry, no sample fallback', status: 'PASS' });
   const refused = await ask('Who won the Super Bowl?');
@@ -55,7 +68,7 @@ try {
 
   await page.goto(`${ui}?api=${encodeURIComponent(mockModelApi)}`, { waitUntil: 'domcontentloaded' });
   await select('Stockton', 'place-ca-stockton');
-  await page.getByRole('button', { name: 'Ask FireWatch AI', exact: true }).click();
+  await openChat();
   const weather = await ask('What is the weather tomorrow?');
   assert.equal(weather.mode, 'api'); assert.match(weather.model, /MOCK/);
   assert.ok(weather.sources.some(source => source.provider === 'Open-Meteo'));
@@ -101,7 +114,7 @@ try {
   assert.ok(panel.x >= 0 && panel.x + panel.width <= 391);
   await page.screenshot({ path: path.join(output, 'mobile-chat.png') });
   await page.getByRole('button', { name: 'Close assistant' }).click();
-  await page.getByRole('button', { name: 'Ask FireWatch AI', exact: true }).waitFor();
+  await openChat();
   results.steps.push({ name: 'Clear, mobile layout, accessible close/reopen', status: 'PASS' });
   assert.equal(results.errors.length, 0);
   results.status = 'PASS';

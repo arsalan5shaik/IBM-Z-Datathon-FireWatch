@@ -9,7 +9,7 @@ import { getState, setState, useStore, validTimeOf, type ChatContext, type ChatM
 let seq = 0;
 let requestNumber = 0;
 let active: AbortController | null = null;
-const msg = (m: Omit<ChatMessage, 'id' | 'at'>): ChatMessage => ({ ...m, id: `m${++seq}`, at: Date.now() });
+const msg = (m: Omit<ChatMessage, 'id' | 'at'>): ChatMessage => ({ ...m, context_key: m.context_key ?? selectionKey(), id: `m${++seq}`, at: Date.now() });
 
 /** Backend AI does not depend on operational ML predictions. */
 export const chatMode = (): 'api' | 'offline' => remote ? 'api' : 'offline';
@@ -46,7 +46,7 @@ export async function sendChat(text: string) {
   const token = ++requestNumber;
   active?.abort();
   const ctrl = new AbortController(); active = ctrl;
-  const history = s.chat.messages.filter(m => m.mode !== 'error').slice(-CHAT_MAX_TURNS_SENT)
+  const history = s.chat.messages.filter(m => m.mode !== 'error' && m.context_key === key).slice(-CHAT_MAX_TURNS_SENT)
     .map(m => ({ role: m.role, content: m.content.slice(0, 1800) }));
   const label = context?.label ?? `California · ${formatStamp(hour)}`;
   setState(st => ({ chat: { ...st.chat, pending: true, messages: [...st.chat.messages.slice(-39), msg({ role: 'user', content: message, context_label: label })] } }));
@@ -65,7 +65,7 @@ export async function sendChat(text: string) {
       } } }));
       push(msg({ role: 'assistant', content: res.answer, grounding: res.grounding, sources: res.sources,
         limitations: res.limitations, suggested_questions: res.suggested_questions, model: res.model,
-        context_label: label, mode: 'api' }));
+        context_label: res.location ? `${res.location.name} · ${res.requested_time ? formatStamp(Date.parse(res.requested_time)) : formatStamp(hour)}` : label, mode: 'api' }));
     } catch (error) {
       push(msg({ role: 'assistant', content: `The backend AI service is unavailable. ${error instanceof Error ? error.message : 'Please retry.'}`,
         retry_text: message, context_label: label, mode: 'error' }));

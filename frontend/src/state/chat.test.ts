@@ -82,6 +82,15 @@ describe('FireWatch backend assistant', () => {
     expect(getState().chat.messages.some(message => message.content === 'Old hour')).toBe(false);
   });
 
+  it('retains displayed history but sends only the current map/hour context', async () => {
+    const call = vi.spyOn(RemoteProvider.prototype, 'chat').mockResolvedValue(result());
+    await sendChat('Weather tomorrow');
+    setState({ isLive: false, timeIndex: 1 });
+    await sendChat('And wind?');
+    expect(call.mock.calls[1][0].conversation).toEqual([]);
+    expect(getState().chat.messages.length).toBe(4);
+  });
+
   it('retains an explicitly named chat location until the map selection changes', async () => {
     const call = vi.spyOn(RemoteProvider.prototype, 'chat').mockResolvedValue({ ...result(), location: sacramento });
     await sendChat('Weather in Sacramento'); await sendChat('What about tomorrow?');

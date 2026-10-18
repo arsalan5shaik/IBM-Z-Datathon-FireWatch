@@ -46,7 +46,12 @@ def resolve_time(expression, selected, now):
     day = None
     match = re.search(r"\b(\d{4}-\d{2}-\d{2})\b", text)
     if match:
-        day = datetime.strptime(match[1], "%Y-%m-%d").date()
+        try:
+            day = datetime.strptime(match[1], "%Y-%m-%d").date()
+        except ValueError:
+            raise APIError(
+                "invalid_chat_date", "Use a valid California calendar date", 422
+            ) from None
     elif "tomorrow" in text:
         day = today + timedelta(days=1)
     elif "weekend" in text:

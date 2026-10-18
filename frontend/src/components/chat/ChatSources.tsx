@@ -27,6 +27,9 @@ export function ChatSources({ sources }: { sources: ChatSource[] }) {
         <div>{source.provider}{source.scope ? ` · ${source.scope}` : ''}</div>
         {source.valid_at && <div>Valid / observed: {stamp(source.valid_at)}</div>}
         {source.freshness && <div>Freshness: {source.freshness}</div>}
+        {source.fetched_at && <div>Provider refreshed: {stamp(source.fetched_at)}</div>}
+        {source.generated_at && <div>Prediction generated: {stamp(source.generated_at)}</div>}
+        {source.sampling_coordinates && <div>Sample: {source.sampling_coordinates[1].toFixed(4)}, {source.sampling_coordinates[0].toFixed(4)} · coarse weather anchor</div>}
         {source.kind === 'research' && <div>Published: {stamp(source.published_at)}</div>}
         <div>Retrieved: {stamp(source.retrieved_at)}</div>
       </li>;

@@ -280,3 +280,9 @@ dataset provenance, aliases, ZCTA limitations, frontend/weather behavior and
 HTTPS deployment configuration: [location handoff](LOCATIONS_INTEGRATION.md).
 Deployments must include the existing `frontend/public/data` geography or set
 `LOCATIONS_DATA_DIR`. ML cell mapping is explicitly unavailable pending its contract.
+# FireWatch AI assistant
+
+`POST /api/v1/chat` uses the backend-only official OpenAI SDK and Responses API,
+default `gpt-5-mini`. [Setup, security, tools, research, citations, hosting and
+LinuxONE notes](CHATBOT.md). Set `OPENAI_API_KEY` on the backend only. Missing keys
+produce an explicit unavailable state; no fake live chatbot is substituted.

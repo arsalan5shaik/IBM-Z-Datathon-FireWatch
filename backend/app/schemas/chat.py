@@ -65,6 +65,9 @@ class ChatSource(StrictModel):
     valid_at: str | None = None
     freshness: str | None = None
     scope: str | None = None
+    fetched_at: str | None = None
+    generated_at: str | None = None
+    sampling_coordinates: tuple[float, float] | None = None
 
 
 class ChatResponse(StrictModel):

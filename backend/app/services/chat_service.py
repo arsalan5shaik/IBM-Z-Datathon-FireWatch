@@ -72,14 +72,30 @@ class ChatService:
             )
         if mentioned:
             tools.location = mentioned[0]
+        routing_message = request.message
+        prior = next(
+            (
+                m.content
+                for m in reversed(request.history)
+                if m.role == "user" and SCOPE.search(m.content)
+            ),
+            "",
+        )
+        if FOLLOWUP.search(request.message) and prior:
+            routing_message = prior + "; follow-up: " + request.message
         if not self.client.key:
             raise APIError(
                 "chat_not_configured",
                 "Set OPENAI_API_KEY on the FastAPI server; live AI is unavailable",
                 503,
             )
-        if re.search(r"tomorrow|today|weekend|\d{4}-\d{2}-\d{2}|\bnow\b", request.message, re.I):
-            interpreted = resolve_time(request.message, tools.hour, now)
+        time_expression = (
+            request.message
+            if re.search(r"tomorrow|today|weekend|\d{4}-\d{2}-\d{2}|\bnow\b", request.message, re.I)
+            else routing_message
+        )
+        if re.search(r"tomorrow|today|weekend|\d{4}-\d{2}-\d{2}|\bnow\b", time_expression, re.I):
+            interpreted = resolve_time(time_expression, tools.hour, now)
             interpreted_hour = datetime.fromisoformat(interpreted["hour"].replace("Z", "+00:00"))
             if interpreted_hour.date() < now.date() and re.search(
                 r"histor|caused|camp fire|happened", request.message, re.I
@@ -90,17 +106,6 @@ class ChatService:
         else:
             interpreted = {"hour": iso(tools.hour), "interpretation": "Selected forecast hour"}
         preflight = []
-        routing_message = request.message
-        if not SCOPE.search(request.message) and FOLLOWUP.search(request.message):
-            prior = next(
-                (
-                    m.content
-                    for m in reversed(request.history)
-                    if m.role == "user" and SCOPE.search(m.content)
-                ),
-                "",
-            )
-            routing_message = prior + " " + request.message
         question = routing_message.lower()
         if re.search(r"weather|wind|humid|rain|temperature|gust", question) and tools.location:
             name = "get_wind" if "wind" in question else "get_weather"

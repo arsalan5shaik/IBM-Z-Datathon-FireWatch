@@ -45,6 +45,7 @@ export interface ChatMessage {
   limitations?: string[];
   suggested_questions?: string[];
   context_label?: string;
+  context_key?: string;
   retry_text?: string;
   model?: string | null;
 }
