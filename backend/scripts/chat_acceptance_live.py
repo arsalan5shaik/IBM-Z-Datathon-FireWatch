@@ -106,6 +106,13 @@ QUESTIONS = [
         [r"cannot verify current evacuation orders", r"911"],
         [],
     ),
+    (
+        "What is the weather in Stockton tomorrow afternoon?",
+        STOCKTON,
+        {"openai"},
+        [r"°?F\b|Fahrenheit|°?C\b", r"wind"],
+        [r"observed|measured"],
+    ),
 ]
 
 

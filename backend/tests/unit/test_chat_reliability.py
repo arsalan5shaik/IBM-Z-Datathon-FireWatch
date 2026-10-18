@@ -19,6 +19,7 @@ from app.services.chat_tools import mentioned_locations
 from app.services.openai_client import TRACE, ChatTrace, ResponsesClient
 from tests.unit.test_chat import (
     NOW,
+    PLACE,
     SOURCE_URL,
     MockResponses,
     final,
@@ -303,6 +304,73 @@ def test_finalize_rejects_unregistered_url_even_with_tracking_parameters(setup):
     assert error.value.code == "chat_citation_invalid"
 
 
+def test_official_url_containing_risk_assessment_is_not_a_secret(setup):  # noqa: F811
+    # Live regression: "...chapter-4-risk-assessment-pdf.pdf" matched an unbounded
+    # sk- key pattern, rejecting a valid natively cited research answer.
+    pdf = "https://www.fire.ca.gov/media/plan-chapter-4-risk-assessment-pdf.pdf"
+    action = {"type": "search", "sources": [{"type": "url", "url": pdf}]}
+    response = research_response(
+        [("completed", action)], [pdf], text=f"Wind drives fire spread ([plan]({pdf}))."
+    )
+    instance, client, _ = service(setup, response)
+    result = run(instance.answer(request("How does wind affect wildfire spread?")))
+    assert len(client.calls) == 1 and pdf in result.answer
+
+
+def test_local_clock_times_must_equal_a_cited_timestamp():
+    from app.services.chat_service import local_time_claims
+
+    # 2026-10-17T22:00Z is 15:00 PDT; 2026-12-17T22:00Z is 14:00 PST.
+    evidence = '{"forecast_hour": "2026-10-17T22:00:00Z", "w": "2026-12-17T22:00:00Z"}'
+    for text in [
+        "Tomorrow afternoon (2026-10-17 15:00 PDT) it is 20 C.",
+        "At 3:00 PM PDT it is 20 C.",
+        "At 3:00 p.m. PT it is 20 C.",
+        "Winter sample: 2026-12-17 14:00 PST.",
+    ]:
+        assert "PDT" not in local_time_claims(text, evidence)
+        assert "PST" not in local_time_claims(text, evidence)
+    # Wrong hour, wrong date, or a fetch-free invented time all fail closed, even
+    # when the digits occur elsewhere in the evidence.
+    for text in ["At 2026-10-17 17:00 PDT", "At 2026-10-18 15:00 PDT", "At 10:22 PDT"]:
+        with pytest.raises(APIError) as error:
+            local_time_claims(text, evidence)
+        assert error.value.code == "chat_fact_unverified"
+
+
+def test_live_weather_answer_with_local_forecast_time_is_accepted(setup):  # noqa: F811
+    # Live regression: "Tomorrow afternoon (2026-10-18 15:00 PDT) ..." returned 502
+    # because only the UTC forecast hour (22:00Z) was numeric evidence.
+    hour = NOW.replace(hour=22)
+    instance, _, _ = service(
+        setup, final("Tomorrow afternoon (2026-10-17 15:00 PDT) it is 20 C (68 F). [fw-1]")
+    )
+    result = run(
+        instance.answer(
+            ChatRequest(message="Weather in Stockton", location_id=PLACE, selected_hour=hour)
+        )
+    )
+    assert "15:00 PDT" in result.answer
+    wrong = service(setup, final("At 2026-10-17 16:00 PDT it is 20 C. [fw-1]"))[0]
+    with pytest.raises(APIError) as error:
+        run(
+            wrong.answer(
+                ChatRequest(message="Weather in Stockton", location_id=PLACE, selected_hour=hour)
+            )
+        )
+    assert error.value.code == "chat_fact_unverified"
+
+
+@pytest.mark.parametrize(
+    "token", ["sk-proj-" + "Ab3_" * 10, "sk-" + "x9" * 24, "BEGIN RSA PRIVATE KEY"]
+)
+def test_key_shaped_tokens_are_still_rejected(setup, token):  # noqa: F811
+    instance, _, _ = service(setup, final(f"Forecast temperature is 20 C {token}. [fw-1]"))
+    with pytest.raises(APIError) as error:
+        run(instance.answer(request()))
+    assert error.value.code == "chat_output_rejected"
+
+
 # ---- Orchestration: no redundant or wasted paid calls -------------------------------
 
 
@@ -315,6 +383,20 @@ def test_direct_research_answer_falls_back_to_synthesis_if_invalid(setup):  # no
     result = run(instance.answer(request("How does wind affect wildfire spread?")))
     assert len(client.calls) == 2 and "imagery" not in result.answer
     assert "rapid wildfire spread" in result.answer
+
+
+def test_direct_research_drops_trailing_offer_paragraphs_only(setup):  # noqa: F811
+    # Live: research answers ended with "If you want, I can ..." despite instructions.
+    text = (
+        "Sign up for county alerts and pack a go-bag.\n\n"
+        "If you want, tell me your county and I'll point to its pages.\n\n"
+        "Would you like a printable checklist?"
+    )
+    instance, client, _ = service(setup, model_response(text, web=True))
+    result = run(instance.answer(request("How should I prepare for wildfire evacuation?")))
+    assert "go-bag" in result.answer and "If you want" not in result.answer
+    assert "Would you like" not in result.answer and SOURCE_URL in result.answer
+    assert len(client.calls) == 1
 
 
 def test_failed_research_returns_server_notice_without_paid_synthesis(setup):  # noqa: F811

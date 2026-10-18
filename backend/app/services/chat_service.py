@@ -15,9 +15,15 @@ from app.services.chat_time import forecast_hour, resolve_time
 from app.services.chat_tools import ChatTools, mentioned_locations, tool_definitions
 from app.services.jsonio import reject_constant, unique_pairs
 from app.services.openai_client import TRACE, ChatTrace, ResponsesClient, output_items
-from app.services.time import iso
+from app.services.time import CALIFORNIA, iso
 
 logger = logging.getLogger("firewatch.chat")
+ISO_TIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})")
+LOCAL_TIME = re.compile(
+    r"(?:\b(\d{4}-\d{2}-\d{2})[ T,]+)?\b(\d{1,2}):(\d{2})"
+    r"(?:\s*([ap])\.?\s?m\.?)?\s*(?:PDT|PST|PT)\b",
+    re.I,
+)
 # The client returns its own timeout before the router cancels the whole request.
 DEADLINE_MARGIN_SECONDS = 2
 
@@ -55,11 +61,44 @@ GENERAL_SCIENCE = re.compile(
     r"|\bscience\b",
     re.I,
 )
+# Follow-ups are server-owned; hosted research sometimes ends with an offer
+# paragraph anyway ("If you want, I can ..."). It carries no facts or citations.
+TRAILING_OFFER = re.compile(
+    r"^\s*(?:If you(?:'d| would)? (?:want|like)|Would you like|Do you want|Want me to"
+    r"|I can also|Let me know)",
+    re.I,
+)
 LOCAL_CUE = re.compile(
     r"forecast|today|tonight|tomorrow|weekend|\bnow\b|current|right now"
     r"|this (?:week|morning|afternoon|evening)|\bhere\b|my (?:area|location)",
     re.I,
 )
+
+
+def local_time_claims(text, evidence):
+    """Pacific clock times must be the America/Los_Angeles rendering of a cited
+    UTC timestamp (e.g. 22:00Z -> 15:00 PDT). Returns the text with validated
+    times removed, so their digits are not re-checked as free-standing numbers."""
+    known = set()
+    for value in ISO_TIME.findall(evidence):
+        local = datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(CALIFORNIA)
+        known.add((local.strftime("%Y-%m-%d"), local.strftime("%H:%M")))
+    clocks = {clock for _, clock in known}
+
+    def check(match):
+        day, hour, minute, half = match.groups()
+        hour = int(hour)
+        if half:
+            hour = hour % 12 + (12 if half.lower() == "p" else 0)
+        clock = f"{hour:02d}:{minute}"
+        grounded = (day, clock) in known if day else clock in clocks
+        if not grounded:
+            raise APIError(
+                "chat_fact_unverified", "AI local time does not match a cited timestamp", 502
+            )
+        return " "
+
+    return LOCAL_TIME.sub(check, text)
 
 
 def supported_suggestions(tools):
@@ -249,6 +288,10 @@ class ChatService:
             # it (about 6.5 s and several thousand tokens). It still passes the
             # normal validator; if it fails, fall back to normal synthesis.
             ids = [key for key, row in tools.sources.items() if row.kind == "research"]
+            paragraphs = re.split(r"\n\s*\n", research_text)
+            while len(paragraphs) > 1 and TRAILING_OFFER.search(paragraphs[-1]):
+                paragraphs.pop()
+            research_text = "\n\n".join(paragraphs).strip()
             registered = {canonical_url(tools.sources[key].url) for key in ids}
             if not any(
                 canonical_url(url) in registered
@@ -360,6 +403,8 @@ Use acquisition timestamps only as observation times; fetched_at is provider
 retrieval time. Never substitute retrieval time for observation_start/end.
 Preserve VIIRS confidence labels exactly: l=low, n=nominal, h=high. Nominal
 is not low confidence. Use the supplied confidence_label; do not merge categories.
+Coordinates are [longitude, latitude] decimal degrees: write either signed values
+or N/S/E/W hemisphere letters without a minus sign, never both together.
 Answer concisely (normally at most 180 words). When predictions or SHAP are
 unavailable, use two or three sentences citing their availability results. Do
 not claim this location has elevated risk, speculate about this model's input
@@ -445,7 +490,11 @@ the server supplies supported follow-ups. Do not append 'I can' action menus.
         secret = self.client.key.get_secret_value() if self.client.key else None
         if (
             (secret and secret in generated_text)
-            or re.search(r"sk-[A-Za-z0-9_-]{12,}|BEGIN .*PRIVATE KEY", generated_text)
+            # Key-shaped tokens only: "risk-assessment-..." in a cited official
+            # URL is not a credential (this false positive rejected live research).
+            or re.search(
+                r"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}|BEGIN .*PRIVATE KEY", generated_text
+            )
             or any(
                 line in answer for line in FIREWATCH_SYSTEM_PROMPT.splitlines() if len(line) > 100
             )
@@ -530,7 +579,9 @@ the server supplies supported follow-ups. Do not append 'I can' action menus.
                             "chat_fact_unverified", "AI mislabeled a source timestamp", 502
                         )
             if not any(source.id in cited for source in research_sources):
-                prose = re.sub(r"\[(?:fw|research)-[^\]]+\]", "", answer)
+                prose = re.sub(r"\[(?:fw|research|ref)-[^\]]+\]", "", answer)
+                # Verified local renderings of cited timestamps, like verified F.
+                prose = local_time_claims(prose, evidence)
                 # Ordered-list markers are formatting, not quantitative claims.
                 prose = re.sub(r"(?m)(?:^\s*\d+[.)]|\b\d+\))\s+", "", prose)
                 for number in re.findall(r"(?<![A-Za-z])\d+(?:\.\d+)?", prose):
