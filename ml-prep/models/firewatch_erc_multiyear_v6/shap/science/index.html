@@ -1,0 +1,16 @@
+<!doctype html><html><head><meta charset="utf-8"><title>FireWatch | SHAP Science Dashboard</title><style>body{font-family:system-ui;background:#f5f7fa;color:#16243b;max-width:1100px;margin:28px auto;padding:0 22px}section{background:#fff;border-radius:14px;padding:20px;margin:18px 0;box-shadow:0 2px 12px #09192b16}img{width:100%;height:auto}h1{margin-bottom:4px}.note{color:#516275}</style></head><body>
+<h1>FireWatch V6 — SHAP & Fire Science</h1>
+<p class="note">Native TreeSHAP • July–Dec 2025 sample n=1,800 • Additivity error 8.39233e-05 ERC</p>
+<p>Interpretation: ERC-G is a fuel-moisture-related potential heat release index, not wildfire ignition probability or spread rate. SHAP indicates model attribution, not causal effects.</p>
+<section><img src="01_global_importance.svg" alt="01_global_importance"></section>
+<section><img src="02_shap_distribution.svg" alt="02_shap_distribution"></section>
+<section><img src="03_dependence_rh_mean_7d_pct.svg" alt="03_dependence_rh_mean_7d_pct"></section>
+<section><img src="04_dependence_rh_min_pct.svg" alt="04_dependence_rh_min_pct"></section>
+<section><img src="05_dependence_precip_30d_mm.svg" alt="05_dependence_precip_30d_mm"></section>
+<section><img src="06_dependence_temp_mean_7d_c.svg" alt="06_dependence_temp_mean_7d_c"></section>
+<section><img src="07_dependence_lon.svg" alt="07_dependence_lon"></section>
+<section><img src="08_waterfall_low.svg" alt="08_waterfall_low"></section>
+<section><img src="09_waterfall_typical.svg" alt="09_waterfall_typical"></section>
+<section><img src="10_waterfall_high.svg" alt="10_waterfall_high"></section>
+<section><img src="11_bias_by_erc_range.svg" alt="11_bias_by_erc_range"></section>
+<section><h2>Science references & cautions</h2><p>NWCG: ERC increases as fuels dry; ERC does not use wind speed directly. The gridMET ERC product uses Fuel Model G. High humidity and recent precipitation generally increase fuel moisture and can reduce ERC.</p><p>Sources: <a href="https://www.nwcg.gov/publications/pms437/fire-danger/nfdrs-system-inputs-and-outputs">NWCG fire danger</a> · <a href="https://www.wildfire.gov/page/energy-release-component-erc">Wildfire.gov ERC</a> · <a href="https://www.climatologylab.org/gridmet.html">gridMET</a> · <a href="https://www-nwcg.fs2c.usda.gov/publications/pms425-1/11-weather-and-fuel-moisture">NWCG weather & fuel moisture</a></p><p>Model SHAP cannot validate wildfire occurrences. Correlated inputs share attribution; longitude may stand in for regional climate/fuel model bias. Audit 2025 forecast-time availability before making 7-day forecast claims.</p></section></body></html>

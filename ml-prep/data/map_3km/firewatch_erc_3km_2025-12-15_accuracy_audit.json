@@ -1,0 +1,84 @@
+{
+  "date": "2025-12-15",
+  "grid_total": 46244,
+  "predicted_cells": 46092,
+  "reference_valid_cells": 46242,
+  "matched_valid_cells": 46092,
+  "coverage_pct_of_grid": 99.67130871031918,
+  "source_pixel_count_for_evaluated_cells": 24429,
+  "status_counts": {
+    "ok": 46092,
+    "missing_required_features": 152
+  },
+  "overall": {
+    "n": 46092,
+    "r2": 0.8825039812986573,
+    "mae": 5.723777998134167,
+    "rmse": 7.486502502906657,
+    "bias": 3.0689335088518614,
+    "p95_absolute_error": 15.128619999999998,
+    "observed_mean": 43.56842836066996,
+    "predicted_mean": 46.63736186952182
+  },
+  "by_actual_erc": {
+    "below_30": {
+      "n": 16494,
+      "r2": -0.15722533793839322,
+      "mae": 5.38956477931369,
+      "rmse": 7.029922778972689,
+      "bias": 2.355716040378319,
+      "p95_absolute_error": 14.229665499999989,
+      "observed_mean": 18.641020977325088,
+      "predicted_mean": 20.99673701770341
+    },
+    "30_to_59": {
+      "n": 13336,
+      "r2": -0.03980820359255777,
+      "mae": 7.9674197877924415,
+      "rmse": 9.9656482282312,
+      "bias": 4.336086116526695,
+      "p95_absolute_error": 19.30878,
+      "observed_mean": 45.24632573485303,
+      "predicted_mean": 49.58241185137972
+    },
+    "60_to_89": {
+      "n": 16262,
+      "r2": -0.03785460829901299,
+      "mae": 4.222812921534866,
+      "rmse": 5.223851717065815,
+      "bias": 2.753170487639897,
+      "p95_absolute_error": 10.169609999999999,
+      "observed_mean": 67.47546427253721,
+      "predicted_mean": 70.2286347601771
+    },
+    "90_plus": null
+  },
+  "notes": [
+    "One historical day only, 2025-07-09 unless overridden; not a forecast skill metric.",
+    "Comparing reconstructed gridMET ERC-G against gridMET ERC-G itself, not wildfire observations.",
+    "3km cell centers map to nearest source gridMET pixels; neighboring cells may share target values.",
+    "Many evaluated locations were not training sample cells; this is geographic extrapolation but not independent geographic-block validation.",
+    "Original 2025 test set has been inspected during model development; treat this as a diagnostic audit."
+  ],
+  "in_multiyear_sample": {
+    "n": 600,
+    "r2": 0.8746625126661136,
+    "mae": 5.9204401833333336,
+    "rmse": 7.710933413070225,
+    "bias": 3.3464053833333334,
+    "p95_absolute_error": 16.35274899999999,
+    "observed_mean": 45.61333333333334,
+    "predicted_mean": 48.95973871666666
+  },
+  "outside_multiyear_sample": {
+    "n": 45492,
+    "r2": 0.8825930731254499,
+    "mae": 5.721184194583663,
+    "rmse": 7.483497482597793,
+    "bias": 3.0652738956300007,
+    "p95_absolute_error": 15.116,
+    "observed_mean": 43.541457838740875,
+    "predicted_mean": 46.606731734370875
+  },
+  "multiyear_sample_cell_count": 600
+}

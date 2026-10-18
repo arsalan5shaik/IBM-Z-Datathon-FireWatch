@@ -1,0 +1,42 @@
+{
+  "dataset": "/home/linux1/firewatch/data/processed/erc_weather_2024_full_year_sample.csv",
+  "selection_split": "validation (September 2024)",
+  "test_used_for_selection": false,
+  "features": [
+    "temp_max_c",
+    "rh_min_pct",
+    "wind_mean_ms",
+    "precip_mm",
+    "elevation_mean_m",
+    "lat",
+    "lon",
+    "day_sin",
+    "day_cos"
+  ],
+  "models": [
+    {
+      "name": "conservative_depth3",
+      "best_iteration": 132,
+      "val_mae": 15.55690860748291,
+      "val_rmse": 17.92894744873047,
+      "val_bias": -14.488850593566895,
+      "val_p95_absolute_error": 31.001666259765614
+    },
+    {
+      "name": "shallow_depth3",
+      "best_iteration": 119,
+      "val_mae": 15.980589866638184,
+      "val_rmse": 18.22637367248535,
+      "val_bias": -14.974102020263672,
+      "val_p95_absolute_error": 31.04702320098876
+    },
+    {
+      "name": "regularized_depth4",
+      "best_iteration": 142,
+      "val_mae": 16.311992645263672,
+      "val_rmse": 18.84893226623535,
+      "val_bias": -15.542095184326172,
+      "val_p95_absolute_error": 32.2843723297119
+    }
+  ]
+}

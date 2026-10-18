@@ -1,0 +1,54 @@
+{
+  "status": "SOFTWARE_PREFLIGHT_ONLY_NOT_FORECAST_VALIDATION",
+  "checks": [
+    {
+      "test": "Release files and V6 fingerprint",
+      "status": "PASS",
+      "detail": "verified model SHA256 and six pipeline scripts"
+    },
+    {
+      "test": "Model loads / feature order / wind splits",
+      "status": "PASS",
+      "detail": "XGBoost 2.1.4; 15 ordered inputs; wind split counts: daily=0, 7-day=0"
+    },
+    {
+      "test": "Seven-day weather feature engineering",
+      "status": "PASS",
+      "detail": "2 synthetic cells x 7 daily leads; all features present; no hourly claim"
+    },
+    {
+      "test": "Frozen model inference and row-level SHAP",
+      "status": "PASS",
+      "detail": "14 V6 predictions, no NaN, display clipping, SHAP additivity"
+    },
+    {
+      "test": "Click-to-explain dynamic SHAP",
+      "status": "PASS",
+      "detail": "selected cell/date returns top 5 drivers and baseline"
+    },
+    {
+      "test": "Category calibration",
+      "status": "PASS",
+      "detail": "five experimental quantile categories; correctly marked UNVALIDATED"
+    },
+    {
+      "test": "Apply five experimental labels",
+      "status": "PASS",
+      "detail": "all 14 categorized as experimental (NOT validated fire warnings)"
+    },
+    {
+      "test": "Prediction-to-backtest contract",
+      "status": "PASS",
+      "detail": "prediction output retains issue time, forecast source, lead day"
+    },
+    {
+      "test": "Forecast backtest software logic",
+      "status": "PASS",
+      "detail": "7 lead-day metric reports, SYNTHETIC TEST ONLY, not actual forecast validation"
+    }
+  ],
+  "passed": 9,
+  "failed": 0,
+  "scientific_forecast_validation": "NOT COMPLETED",
+  "danger_category_validation": "NOT COMPLETED"
+}

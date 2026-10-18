@@ -1,0 +1,161 @@
+{
+  "name": "firewatch_v6_statewide_historical_integration_gate",
+  "model_sha256": "cb124badd47c898448c30500fe13f4827481e1986bd2a776605a0b99308b2e33",
+  "model_kind": "ERC-G index reconstruction",
+  "data_provenance": "historical observed weather (NOT a forecast)",
+  "audits": [
+    {
+      "date": "2025-04-15",
+      "map_file": {
+        "grid_cells": 46244,
+        "scored": 46092,
+        "missing": 152,
+        "clipped": 0,
+        "coverage": 0.9967130871031917,
+        "sha256": "f0e4aa16012bf957403b647334699bbe648bb1289cd7e943db5c170f601d181e"
+      },
+      "erc_reconstruction": {
+        "n": 46092,
+        "r2": 0.9430702742359006,
+        "mae": 4.539785767161328,
+        "rmse": 5.812462072919256,
+        "bias": 2.2258311494402503,
+        "p95_absolute_error": 11.488892499999976,
+        "observed_mean": 52.509481037924154,
+        "predicted_mean": 54.73531218736441
+      },
+      "erc_90_plus": {
+        "n": 5444,
+        "r2": 0.14709863011904378,
+        "mae": 2.258658993387215,
+        "rmse": 3.0109417719261273,
+        "bias": -0.7307331227038942,
+        "p95_absolute_error": 6.444509999999994,
+        "observed_mean": 93.98695811903012,
+        "predicted_mean": 93.25622499632622
+      },
+      "checks": {
+        "coverage": true,
+        "daily_r2": true,
+        "daily_mae": true,
+        "high_erc_bias": true,
+        "matching_evaluation": true
+      },
+      "distinct_gridmet_pixels": 24429
+    },
+    {
+      "date": "2025-07-09",
+      "map_file": {
+        "grid_cells": 46244,
+        "scored": 46092,
+        "missing": 152,
+        "clipped": 0,
+        "coverage": 0.9967130871031917,
+        "sha256": "a7d82a2e857500d4c16d99d8c56e04d1a603f5325a0200f4276b367184d47c9f"
+      },
+      "erc_reconstruction": {
+        "n": 46092,
+        "r2": 0.8895992741625579,
+        "mae": 6.117578430530243,
+        "rmse": 7.246265156186442,
+        "bias": -4.714552825219127,
+        "p95_absolute_error": 12.988846499999998,
+        "observed_mean": 80.70374468454395,
+        "predicted_mean": 75.98919185932482
+      },
+      "erc_90_plus": {
+        "n": 17832,
+        "r2": 0.17606131149286908,
+        "mae": 6.0878445844549125,
+        "rmse": 6.9177235626210125,
+        "bias": -5.869759842418125,
+        "p95_absolute_error": 11.650514499999998,
+        "observed_mean": 102.8164535666218,
+        "predicted_mean": 96.94669372420368
+      },
+      "checks": {
+        "coverage": true,
+        "daily_r2": true,
+        "daily_mae": true,
+        "high_erc_bias": true,
+        "matching_evaluation": true
+      },
+      "distinct_gridmet_pixels": 24429
+    },
+    {
+      "date": "2025-10-15",
+      "map_file": {
+        "grid_cells": 46244,
+        "scored": 46092,
+        "missing": 152,
+        "clipped": 0,
+        "coverage": 0.9967130871031917,
+        "sha256": "3a0db55a757e7de3930e71a40775db2e8c9d27da6e03506a59ebd861489d2a01"
+      },
+      "erc_reconstruction": {
+        "n": 46092,
+        "r2": 0.8736872055364034,
+        "mae": 4.1289230235181815,
+        "rmse": 5.268475788643546,
+        "bias": -0.41413170354942286,
+        "p95_absolute_error": 10.628929999999997,
+        "observed_mean": 34.55139720558882,
+        "predicted_mean": 34.1372655020394
+      },
+      "erc_90_plus": null,
+      "checks": {
+        "coverage": true,
+        "daily_r2": true,
+        "daily_mae": true,
+        "high_erc_bias": true,
+        "matching_evaluation": true
+      },
+      "distinct_gridmet_pixels": 24429
+    },
+    {
+      "date": "2025-12-15",
+      "map_file": {
+        "grid_cells": 46244,
+        "scored": 46092,
+        "missing": 152,
+        "clipped": 0,
+        "coverage": 0.9967130871031917,
+        "sha256": "f54652dd8f1ac1017b37bb9014e8a466a6eafc535cdc32a08bb00805c1c34585"
+      },
+      "erc_reconstruction": {
+        "n": 46092,
+        "r2": 0.8825039812986573,
+        "mae": 5.723777998134167,
+        "rmse": 7.486502502906657,
+        "bias": 3.0689335088518614,
+        "p95_absolute_error": 15.128619999999998,
+        "observed_mean": 43.56842836066996,
+        "predicted_mean": 46.63736186952182
+      },
+      "erc_90_plus": null,
+      "checks": {
+        "coverage": true,
+        "daily_r2": true,
+        "daily_mae": true,
+        "high_erc_bias": true,
+        "matching_evaluation": true
+      },
+      "distinct_gridmet_pixels": 24429
+    }
+  ],
+  "passed_diagnostic_checks": true,
+  "failed_checks": [],
+  "map_ready_for_historical_research_demo": true,
+  "map_ready_for_live_seven_day_forecast": false,
+  "danger_color_calibration_ready": false,
+  "critical_limits": [
+    "Do not label ERC-G as wildfire likelihood, ignition probability, or fire spread rate.",
+    "Red/orange danger thresholds are NOT calibrated; map may display numeric ERC-G only.",
+    "3 km cells are reporting geometry; gridMET pixels are coarser; grid boundary is provisional.",
+    "Unscored cells must remain unknown (not safe).",
+    "Accuracy measured against gridMET ERC-G (derived index), not wildfire occurrence.",
+    "Near-zero aggregate bias can hide underprediction in high ERC bins.",
+    "2025 results were examined during model iteration; not a pristine independent test.",
+    "Archive weather is observed, not information known for a future forecast date."
+  ]
+}

@@ -1,0 +1,95 @@
+{
+  "features": [
+    "temp_max_c",
+    "rh_min_pct",
+    "wind_mean_ms",
+    "precip_mm",
+    "elevation_mean_m",
+    "lat",
+    "lon",
+    "day_sin",
+    "day_cos",
+    "precip_7d_mm",
+    "precip_30d_mm",
+    "temp_mean_7d_c",
+    "rh_mean_7d_pct",
+    "dry_days_14d",
+    "wind_mean_7d_ms"
+  ],
+  "model_params": {
+    "objective": "reg:squarederror",
+    "eval_metric": "rmse",
+    "tree_method": "hist",
+    "max_depth": 6,
+    "eta": 0.1,
+    "min_child_weight": 1,
+    "subsample": 0.85,
+    "colsample_bytree": 0.8,
+    "lambda": 5.0,
+    "alpha": 0.0,
+    "nthread": 2,
+    "seed": 42
+  },
+  "best_rounds": 800,
+  "data_rows": {
+    "input": 510204,
+    "complete": 468384,
+    "incomplete_history": 41820,
+    "nonconsecutive": 0
+  },
+  "date_ranges": {
+    "train": [
+      "2024-01-31",
+      "2024-08-31"
+    ],
+    "validation": [
+      "2024-09-01",
+      "2024-09-30"
+    ],
+    "test": [
+      "2024-10-01",
+      "2024-12-31"
+    ]
+  },
+  "train": {
+    "n": 298316,
+    "mae": 1.1569528579711914,
+    "rmse": 1.517988920211792,
+    "bias": -0.00020119277178309858,
+    "r2": 0.9975984038591181,
+    "p95_abs_error": 3.075643539428711,
+    "mean_actual": 53.307373046875,
+    "mean_predicted": 53.30717468261719
+  },
+  "validation": {
+    "n": 41820,
+    "mae": 3.4479193687438965,
+    "rmse": 4.347588062286377,
+    "bias": -0.35180380940437317,
+    "r2": 0.9553561766772318,
+    "p95_abs_error": 8.408376121520993,
+    "mean_actual": 75.50418090820312,
+    "mean_predicted": 75.15238189697266
+  },
+  "note": "Observed-weather ERC-G surrogate. Split by dates. No test-set use in model selection. Jan 1-30 have incomplete lag history. 2025 independent test required.",
+  "v1_same_validation_rows": {
+    "n": 41820,
+    "mae": 12.559194564819336,
+    "rmse": 15.040375709533691,
+    "bias": -11.735747337341309,
+    "r2": 0.4657039776436861,
+    "p95_abs_error": 26.837858772277816,
+    "mean_actual": 75.50418090820312,
+    "mean_predicted": 63.76844024658203
+  },
+  "tuned_same_validation_rows": {
+    "n": 41820,
+    "mae": 10.665757179260254,
+    "rmse": 13.08297348022461,
+    "bias": -10.023966789245605,
+    "r2": 0.5957244340323824,
+    "p95_abs_error": 24.47617378234863,
+    "mean_actual": 75.50418090820312,
+    "mean_predicted": 65.48021697998047
+  }
+}

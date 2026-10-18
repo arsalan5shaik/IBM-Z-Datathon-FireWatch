@@ -1,0 +1,15 @@
+{
+  "elevation_dataset": "NOAA ETOPO 2022 ice surface",
+  "dem_path": "/Users/eshannsaxena/Downloads/FireWatch_CA_Elevation/ETOPO_2022_California_15s_subset.nc",
+  "source_url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/ETOPO_2022_v1_15s.nc?z[(32.0):1:(42.5)][(-125.0):1:(-113.5)]",
+  "source_crs": "see DEM metadata; coordinate-only NOAA NetCDF converted to EPSG:4326 when needed",
+  "analysis_crs": "EPSG:3310",
+  "sample_spacing_m": 300.0,
+  "grid_size_m": 3000,
+  "boundary": "/Users/eshannsaxena/Downloads/FireWatch_CA_Elevation/california_boundary_provisional.geojson",
+  "boundary_quality": "Provisional simplified California boundary; excludes small islands and detailed coastal geometry",
+  "statistic": "mean of valid elevation raster sample values whose centers fall inside land-clipped 3 km cell",
+  "filled": 46093,
+  "missing": 151,
+  "not_surveyed_ground_truth": true
+}

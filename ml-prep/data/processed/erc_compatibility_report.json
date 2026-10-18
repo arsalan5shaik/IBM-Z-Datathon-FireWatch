@@ -1,0 +1,36 @@
+{
+  "phase": "compatibility_and_erc_gate",
+  "grid": {
+    "projection": "EPSG:3310",
+    "cell_width_m": 3000,
+    "total_cells": 46244,
+    "grid_id_format": "CA3K_X{grid_col:+05d}_Y{grid_row:+05d}",
+    "coordinate_check_sample_size": 3,
+    "max_center_transform_error_m": 0.051,
+    "boundary": "PROVISIONAL, team approval outstanding"
+  },
+  "elevation": {
+    "source": "NOAA ETOPO 2022 (not USGS 3DEP)",
+    "populated_cells": 46093,
+    "missing_cells": 151,
+    "join_id_coverage": "complete"
+  },
+  "satellite_history": {
+    "positive_cell_days": 15416,
+    "by_year": {
+      "2024": 7825,
+      "2025": 7591
+    },
+    "unique_active_cells": 5962,
+    "role_for_ERC_model": "independent retrospective validation only",
+    "satellite_gaps_require_separate_validation": true
+  },
+  "erc": {
+    "historical_source": "University of Idaho gridMET ERC (NFDRS fuel model G)",
+    "archive_2024": "https://www.northwestknowledge.net/metdata/data/erc_2024.nc",
+    "netcdf_inspection": "needs_reader_or_metadata_review",
+    "target_available_locally": true
+  },
+  "training_status": "BLOCKED: no validated daily ERC+weather training table yet",
+  "api_status": "REQUIRES_CONTRACT_UPDATE: old hotspot probability != daily ERC danger"
+}

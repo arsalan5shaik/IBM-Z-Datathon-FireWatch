@@ -1,0 +1,126 @@
+{
+  "release_name": "firewatch_erc_v6_2023_2025",
+  "status": "research_prototype_not_operational",
+  "created_utc": "2026-10-18T05:02:06.856064+00:00",
+  "xgboost_version": "2.1.4",
+  "target": "gridMET Energy Release Component, Fuel Model G (ERC-G) index",
+  "not_a_wildfire_probability": true,
+  "not_a_seven_day_forecast": true,
+  "observed_same_day_weather_required": true,
+  "training_years": [
+    2023,
+    2024
+  ],
+  "validation_period": "2025-01 through 2025-06",
+  "evaluated_period": "2025-07 through 2025-12 (previously inspected during model selection)",
+  "training_data": "600 selected cells, repeated cell-day observations; not statewide grid coverage",
+  "feature_order": [
+    "temp_max_c",
+    "rh_min_pct",
+    "wind_mean_ms",
+    "precip_mm",
+    "elevation_mean_m",
+    "lat",
+    "lon",
+    "day_sin",
+    "day_cos",
+    "precip_7d_mm",
+    "precip_30d_mm",
+    "temp_mean_7d_c",
+    "rh_mean_7d_pct",
+    "dry_days_14d",
+    "wind_mean_7d_ms"
+  ],
+  "friendly_feature_names": {
+    "temp_max_c": "Today’s High Temperature (°C)",
+    "rh_min_pct": "Today’s Lowest Relative Humidity (%)",
+    "wind_mean_ms": "Daily Mean Wind Speed (m/s)",
+    "precip_mm": "Daily Rainfall (mm)",
+    "elevation_mean_m": "Elevation (m)",
+    "lat": "Latitude",
+    "lon": "Longitude",
+    "day_sin": "Seasonality (sine)",
+    "day_cos": "Seasonality (cosine)",
+    "precip_7d_mm": "7-Day Rainfall (mm)",
+    "precip_30d_mm": "30-Day Rainfall (mm)",
+    "temp_mean_7d_c": "7-Day Average High Temperature (°C)",
+    "rh_mean_7d_pct": "7-Day Average Minimum Humidity (%)",
+    "dry_days_14d": "Dry Days in the Previous 14 Days",
+    "wind_mean_7d_ms": "7-Day Mean Wind Speed (m/s)"
+  },
+  "display_metric": "Estimated Fire-Weather Energy Release Index (ERC-G)",
+  "limitations": [
+    "Not wildfire ignition probability or expected acres burned",
+    "2025 H2 was examined during development, so not a pristine untouched model-selection test",
+    "Spatial holdout uses selected cell IDs; neighboring cells may share original raster pixels",
+    "Unvalidated seven-day forecast; live predictions need forecast weather and lag-history construction",
+    "VIIRS hotspot discrimination was weak in the 600-cell sample (AUROC about 0.556)",
+    "Raw ERC estimates may be below zero; handle display separately, never modify stored evaluation metrics",
+    "Do not treat ERC-G thresholds as universal California-wide fire-danger categories"
+  ],
+  "smoke_test": {
+    "rows": 100,
+    "min_prediction": 37.47847366333008,
+    "max_prediction": 99.88642120361328,
+    "max_shap_additivity_error": 4.1961669921875e-05
+  },
+  "files_sha256": {
+    "model.json": "cb124badd47c898448c30500fe13f4827481e1986bd2a776605a0b99308b2e33",
+    "metrics.json": "8ddfa17bf29dd59d92d5e5df7eaa858795996305914bf54fa84fc09a6f80a6e1",
+    "features.json": "438feb2afc4bc086297141912f9c08403196586b669f5b423ef47a585f2e2746"
+  },
+  "evaluation": {
+    "train": {
+      "n": 278297,
+      "r2": 0.954854706520511,
+      "mae": 4.792501926865263,
+      "rmse": 6.181976322056755,
+      "bias": 4.902129134350109e-05,
+      "median_ae": 3.8497161865234375,
+      "p95_ae": 12.433236694335939,
+      "actual_mean": 53.57091165194019,
+      "predicted_mean": 53.57096067323154,
+      "actual_std": 29.095183260186616,
+      "predicted_std": 28.26581350442284
+    },
+    "val": {
+      "n": 71857,
+      "r2": 0.9363326620778354,
+      "mae": 5.345473148012389,
+      "rmse": 6.7769616456825235,
+      "bias": -2.1078235152254203,
+      "median_ae": 4.455129623413086,
+      "p95_ae": 13.336159896850585,
+      "actual_mean": 51.95101381911296,
+      "predicted_mean": 49.84319030388754,
+      "actual_std": 26.858186306141686,
+      "predicted_std": 26.71297672561819
+    },
+    "test": {
+      "n": 110400,
+      "r2": 0.9368039217012273,
+      "mae": 5.683655814285934,
+      "rmse": 7.064776706587434,
+      "bias": -0.09189230266393271,
+      "median_ae": 4.898405075073242,
+      "p95_ae": 13.577948379516595,
+      "actual_mean": 56.38259963768116,
+      "predicted_mean": 56.290707335017224,
+      "actual_std": 28.103044791894302,
+      "predicted_std": 26.00940910420893
+    },
+    "spatial": {
+      "n": 36743,
+      "r2": 0.9417451294909082,
+      "mae": 5.2402727199763275,
+      "rmse": 6.607611007568138,
+      "bias": -2.133470154205116,
+      "median_ae": 4.376167297363281,
+      "p95_ae": 12.9482650756836,
+      "actual_mean": 52.38973409901206,
+      "predicted_mean": 50.25626394480694,
+      "actual_std": 27.376526678613644,
+      "predicted_std": 27.078511883586813
+    }
+  }
+}

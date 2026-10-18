@@ -1,0 +1,24 @@
+{
+  "sample_size": 1800,
+  "eligible_rows": 110400,
+  "max_shap_additivity_error": 8.392333984375e-05,
+  "source": "2025 H2 observed-weather ERC-G reconstructions",
+  "mean_absolute_shap": {
+    "rh_mean_7d_pct": 9.042081832885742,
+    "rh_min_pct": 7.348737716674805,
+    "precip_30d_mm": 4.760148525238037,
+    "lon": 3.053288459777832,
+    "precip_mm": 2.7954020500183105,
+    "day_cos": 1.8352149724960327,
+    "day_sin": 1.7095189094543457,
+    "elevation_mean_m": 1.5099166631698608,
+    "temp_mean_7d_c": 1.1071332693099976,
+    "lat": 0.5217980742454529,
+    "dry_days_14d": 0.3781748414039612,
+    "temp_max_c": 0.23240932822227478,
+    "precip_7d_mm": 0.10475718975067139,
+    "wind_mean_ms": 0.0,
+    "wind_mean_7d_ms": 0.0
+  },
+  "mean_error": 0.15579391764269934
+}

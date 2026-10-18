@@ -1,0 +1,45 @@
+{
+  "model": "Native XGBoost ERC-G regression",
+  "training_dates": [
+    "2024-01-01",
+    "2024-08-31"
+  ],
+  "validation_dates": [
+    "2024-09-01",
+    "2024-09-30"
+  ],
+  "test_dates": [
+    "2024-10-01",
+    "2024-12-31"
+  ],
+  "cells_sampled": 1400,
+  "train_rows": 340136,
+  "validation_rows": 41820,
+  "test_rows": 128248,
+  "best_iteration": 304,
+  "features": [
+    "temp_max_c",
+    "rh_min_pct",
+    "wind_mean_ms",
+    "precip_mm",
+    "elevation_mean_m",
+    "lat",
+    "lon",
+    "day_sin",
+    "day_cos"
+  ],
+  "xgboost_mae": 14.89405632019043,
+  "xgboost_rmse": 17.59833526611328,
+  "mean_baseline_mae": 28.196657180786133,
+  "mean_baseline_rmse": 31.84571647644043,
+  "counts": {
+    "train_rows": 340136,
+    "missing_source_rows": 2196,
+    "validation_rows": 41820,
+    "test_rows": 128248
+  },
+  "caveat": "Historical observed same-day weather; ERC-G surrogate, not forecast lead-day accuracy. Same geography across splits. Further spatial/multi-year tests required.",
+  "libraries": {
+    "xgboost": "2.1.4"
+  }
+}

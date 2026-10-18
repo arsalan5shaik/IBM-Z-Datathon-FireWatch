@@ -1,0 +1,19 @@
+{
+  "erc_file": "data/raw/erc/erc_2024.nc",
+  "variable": "energy_release_component-g",
+  "fuel_model": "G",
+  "grid_file": "data/raw/california_3km_grid_lookup.csv",
+  "sample_method": "nearest source raster pixel at canonical cell centroid",
+  "date_start": "2024-07-20",
+  "date_end": "2024-07-26",
+  "cells_per_day": 46244,
+  "days": 7,
+  "rows_with_target": 323694,
+  "rows_missing_target": 14,
+  "raw_fill_values": [
+    32767.0,
+    32767.0
+  ],
+  "scale_factor": 1.0,
+  "add_offset": 0.0
+}

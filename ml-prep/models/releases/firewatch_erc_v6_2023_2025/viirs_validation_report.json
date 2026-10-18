@@ -1,0 +1,87 @@
+{
+  "method": "Retrospective association of predicted ERC-G with observed VIIRS active-fire detection; NOT ignition probability, causal effect, or seven-day forecast skill",
+  "model": "/home/linux1/firewatch/models/firewatch_erc_multiyear_v6/model.json",
+  "features": [
+    "temp_max_c",
+    "rh_min_pct",
+    "wind_mean_ms",
+    "precip_mm",
+    "elevation_mean_m",
+    "lat",
+    "lon",
+    "day_sin",
+    "day_cos",
+    "precip_7d_mm",
+    "precip_30d_mm",
+    "temp_mean_7d_c",
+    "rh_mean_7d_pct",
+    "dry_days_14d",
+    "wind_mean_7d_ms"
+  ],
+  "source_hotspot_positive_cell_days": 15416,
+  "coverage_proxy": {
+    "2024": {
+      "dates_with_records": 343,
+      "input_records": 38338
+    },
+    "2025": {
+      "dates_with_records": 359,
+      "input_records": 36442
+    }
+  },
+  "excluded": {
+    "day_without_raw_VIIRS_records": 17400
+  },
+  "eligible_rows": 421200,
+  "overlap_positive_cell_days": 174,
+  "unmatched_positive_cell_days": 15242,
+  "observed_erc": {
+    "n": 421200,
+    "hotspot_cell_days": 174,
+    "non_detected_cell_days": 421026,
+    "hotspot_fraction": 0.0004131054131054131,
+    "roc_auc": 0.5632932626379423,
+    "average_precision": 0.00047215995630854417
+  },
+  "predicted_erc": {
+    "n": 421200,
+    "hotspot_cell_days": 174,
+    "non_detected_cell_days": 421026,
+    "hotspot_fraction": 0.0004131054131054131,
+    "roc_auc": 0.5559415447682239,
+    "average_precision": 0.00045561476946463444
+  },
+  "by_predicted_erc_range": [
+    {
+      "predicted_ERC_range": "0\u201329",
+      "cell_days": 98411,
+      "VIIRS_detected_cell_days": 28,
+      "detected_fraction": 0.00028452103931471076
+    },
+    {
+      "predicted_ERC_range": "30\u201359",
+      "cell_days": 138118,
+      "VIIRS_detected_cell_days": 52,
+      "detected_fraction": 0.0003764896682546808
+    },
+    {
+      "predicted_ERC_range": "60\u201389",
+      "cell_days": 132934,
+      "VIIRS_detected_cell_days": 71,
+      "detected_fraction": 0.0005340996283870191
+    },
+    {
+      "predicted_ERC_range": "90+",
+      "cell_days": 48111,
+      "VIIRS_detected_cell_days": 23,
+      "detected_fraction": 0.00047806115025669804
+    }
+  ],
+  "same_cell_same_month_contrast": {
+    "number_of_strata": 115,
+    "positive_cell_days_in_strata": 174,
+    "weighted_predicted_ERC_difference_detected_minus_nondetected": 4.0799656133542115,
+    "weighted_reference_ERC_difference_detected_minus_nondetected": 3.632004606312719,
+    "interpretation": "Observational within-location/month association; NOT causal and can be affected by persistent fires and satellite detectability."
+  }
+}
