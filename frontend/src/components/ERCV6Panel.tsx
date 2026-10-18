@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, Minus } from 'lucide-react';
 import { API_BASE } from '../config';
 import { setState, useStore } from '../state/store';
@@ -52,10 +52,13 @@ function ERCV6Card({ base }: { base: string }) {
   const chatOpen = useStore((state) => state.chatOpen);
   const panelOpen = useStore((state) => !!state.selection);
   const [restoreChat, setRestoreChat] = useState(false);
+  const hadForecast = useRef(false);
+  const failed = useRef(false);
 
   // Step aside while the assistant or the details panel occupies the right side.
   useEffect(() => {
-    setExpanded(!chatOpen && !panelOpen);
+    // Without any V6 data the card stays a tab unless the user opens it.
+    setExpanded(!chatOpen && !panelOpen && (hadForecast.current || !failed.current));
   }, [chatOpen, panelOpen]);
 
   useEffect(() => {
@@ -68,6 +71,7 @@ function ERCV6Card({ base }: { base: string }) {
         if (!(response.headers.get('content-type') ?? '').includes('json')) throw new Error('The V6 forecast service is not available on this server');
         const data = (await response.json()) as Forecast;
         if (active) {
+          hadForecast.current = true;
           setForecast((previous) => (previous?.snapshot_id === data.snapshot_id ? previous : data));
           setError('');
           setLoading(false);
@@ -76,6 +80,9 @@ function ERCV6Card({ base }: { base: string }) {
         if (active) {
           setError(err instanceof Error ? err.message : 'Forecast unavailable');
           setLoading(false);
+          // Never loaded: tuck the card away as a small tab instead of showing an error panel.
+          if (!hadForecast.current && !failed.current) setExpanded(false);
+          failed.current = true;
         }
       }
     }
@@ -138,7 +145,7 @@ function ERCV6Card({ base }: { base: string }) {
 
   if (!expanded) {
     return (
-      <button type="button" className={`v6-tab${error ? ' is-error' : ''}`} aria-label="Open FireWatch V6 data" aria-expanded={false} onClick={openV6}>
+      <button type="button" className={`v6-tab${error ? ' is-error' : ''}`} aria-label={error && !forecast ? 'FireWatch V6 data unavailable — show details' : 'Open FireWatch V6 data'} title={error && !forecast ? 'V6 forecast unavailable' : undefined} aria-expanded={false} onClick={openV6}>
         <ChevronLeft size={14} aria-hidden />
         <span>V6 ERC-G</span>
       </button>

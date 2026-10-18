@@ -127,8 +127,10 @@ export async function loadPlaces() {
 // ---- backend risk: on-demand tiles ---------------------------------------------------------
 type BBoxT = [number, number, number, number];
 /** Ask for the forecast cells covering the visible map at the selected hour (backend mode). */
+let lastView: BBoxT | null = null;
 export function requestRiskView(bbox: BBoxT, t: number) {
   if (!apiRisk()) return;
+  lastView = bbox;
   const coverage = remote!.requestView(bbox, t);
   if (getState().riskCoverage !== coverage) setState({ riskCoverage: coverage });
   // A 25 % margin around the view loads in the background, so short pans reveal ready cells.
@@ -137,6 +139,12 @@ export function requestRiskView(bbox: BBoxT, t: number) {
   if (coverage !== 'zoom-in') remote!.requestView([w - mx, s - my, e + mx, n + my], t, 20);
   // Upcoming hours load quietly so stepping and playback don't wait on the network.
   if (coverage === 'ok' || coverage === 'loading') remote!.prefetchHours(t, getState().playing ? 6 : 2);
+}
+/** Re-evaluate the visible area's coverage when tiles arrive (no new requests for loaded tiles). */
+function refreshCoverage() {
+  if (!lastView || !apiRisk()) return;
+  const coverage = remote!.requestView(lastView, validTimeOf(getState()));
+  if (getState().riskCoverage !== coverage) setState({ riskCoverage: coverage });
 }
 /** Per-hour load state of the visible forecast tiles (backend mode; null in sample mode). */
 export const riskHourStates = () => (apiRisk() ? remote!.hourStates() : null);
@@ -184,7 +192,10 @@ export function startData() {
   if (remote) {
     // Sparse backend grid updates as tiles arrive.
     remote.onRiskChange = (grid) => {
-      if (getState().risk.origin === 'api' && getState().risk.state === 'ready') setState((s) => ({ risk: { ...s.risk, data: grid, at: Date.now() } }));
+      if (getState().risk.origin === 'api' && getState().risk.state === 'ready') {
+        setState((s) => ({ risk: { ...s.risk, data: grid, at: Date.now() } }));
+        refreshCoverage();
+      }
     };
     // Backend weather is per hour: follow the timeline (debounced so playback doesn't flood the API).
     let timer = 0;

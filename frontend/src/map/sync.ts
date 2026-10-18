@@ -540,7 +540,7 @@ export function startSync(map: MapLibreMap, markers: FireMarkers): () => void {
 
   // ---- selection + highlights ------------------------------------------------------------
   let selectedPerimeter: string | null = null;
-  const drawIn = (layer: string, prop: string, from: number, to: number) => {
+  const drawIn = (layer: string, prop: string, from: number, to: unknown) => {
     if (!map.getLayer(layer)) return;
     if (!motionOn()) return map.setPaintProperty(layer, prop as never, to as never);
     map.setPaintProperty(layer, `${prop}-transition` as never, { duration: 0, delay: 0 } as never);
@@ -584,15 +584,31 @@ export function startSync(map: MapLibreMap, markers: FireMarkers): () => void {
   );
   sub(
     (s) => s.highlight,
-    (h) => src(SRC.highlight)?.setData({ type: 'FeatureCollection', features: h?.boundary ? [h.boundary] : [] }),
+    (h, prev) => {
+      src(SRC.highlight)?.setData({ type: 'FeatureCollection', features: h?.boundary ? [h.boundary] : [] });
+      // A newly searched boundary draws in rather than popping.
+      if (h?.boundary && h.boundary !== prev?.boundary) {
+        drawIn('fw-highlight-line', 'line-width', 0, ['interpolate', ['linear'], ['zoom'], 6, 1.6, 12, 2.6]);
+        drawIn('fw-highlight-glow', 'line-opacity', 0, 0.35);
+        drawIn('fw-highlight-fill', 'fill-opacity', 0, 0.06);
+      }
+    },
   );
+  let breathe: () => void = () => undefined;
   sub(
     (s) => s.userLocation,
-    (u) =>
+    (u) => {
       src(SRC.user)?.setData({
         type: 'FeatureCollection',
         features: u ? [{ type: 'Feature', geometry: { type: 'Point', coordinates: u.lngLat }, properties: { acc: u.accuracy } }] : [],
-      }),
+      });
+      breathe();
+      if (!u || !motionOn()) return;
+      // The accuracy ring breathes a few times when the location is found, then settles.
+      breathe = tween(3600, (_k, raw) => {
+        if (map.getLayer('fw-user-accuracy')) map.setPaintProperty('fw-user-accuracy', 'circle-opacity', 0.12 + 0.12 * Math.sin(raw * Math.PI * 6) ** 2);
+      });
+    },
   );
 
   // ---- camera → store (compass, weather chip, zoom-dependent CSS) ----------------------
@@ -624,5 +640,6 @@ export function startSync(map: MapLibreMap, markers: FireMarkers): () => void {
     localTween();
     nightTween();
     terrainTween();
+    breathe();
   };
 }

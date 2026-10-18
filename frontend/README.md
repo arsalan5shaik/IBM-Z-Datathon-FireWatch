@@ -53,13 +53,20 @@ Proxy a real backend during development: `FIREWATCH_API_PROXY=http://localhost:8
 - **Left controls** — 2D / subtle 3D (25° pitch, 1× terrain), Layers popover (Default/Terrain, Live fires,
   7-day risk, perimeters, wind, weather, vegetation, hotspot lookback, risk opacity, units), wind quick toggle,
   locate me (California only), zoom, compass when rotated. Default/Terrain is also top-right.
-- **Hourly timeline** — Live + 168 forecast hours, day labels in California time, play/pause (1×/2×/4×),
-  ±1 h / ±1 day, calendar jump (incl. statewide peak), risk-trend sparkline (statewide or selected area),
-  valid-time vs model-run vs data-update times.
+- **Hourly timeline** — Live + 168 forecast hours, day labels in California time, play/pause (1×–16×) with a
+  gliding playhead, ±1 h / ±1 day, wheel/trackpad scrubbing, hover previews, night bands, a moving "now" marker,
+  calendar jump (incl. statewide peak), risk-trend sparkline (statewide or selected area), backend buffer bar
+  (playback waits for the next hour's tiles), valid-time vs model-run vs data-update times.
 - **Map** — continuous score colors for API risk (sample mode retains its demonstration categories), flame markers for hotspot clusters,
   FRP-sized / age-coloured detections, official perimeters (solid) vs illustrative hotspot influence
-  (dashed), wind arrows (denser when zoomed in), weather labels, fuel types, California mask, search outline.
-- **Details panel** (on click only; bottom sheet on phones) — forecast cell, place, hotspot, incident or
+  (dashed), wind arrows pointing downwind plus animated wind-flow streaks, weather labels, fuel types,
+  California mask, search outline, optional day/night shading and 3D risk skyline.
+- **Motion** — risk colours morph between hours, overlays fade, the statewide view is a smoothed surface that
+  hands over to model cells as you zoom in, flame markers cluster and split with zoom, fresh hotspots pulse,
+  hotspot replay (last 24/48 h, event-paced), pull-back intro, panels slide in/out, values count to new
+  numbers. `prefers-reduced-motion` (or *Layers → Smooth motion*) turns animation off; heavy derived data
+  runs in a Web Worker (`src/workers/`).
+- **Details panel** (on click only; draggable bottom sheet on phones) — forecast cell, place, hotspot, incident or
   hotspot cluster: risk score/category, hourly 7-day chart (click to jump), conditions, *Why this risk?*
   SHAP bars, nearby fire activity, Ask AI.
 - **FireWatch AI** — contextual chat (selected place/cell/hour), backend LLM when available, otherwise an
