@@ -1,5 +1,8 @@
 # FireWatch backend
 
+Current real-provider verification, fixes, paid-test budget and deployment decision:
+[live API verification report](../docs/LIVE_API_VERIFICATION.md).
+
 API foundation for the primary `FireWatch_Backend_Architecture.md` specification.
 Status, health, validated JSON forecast reads, cached NASA FIRMS observations,
 and forecast weather routes are implemented. No real ML artifacts have been provided.

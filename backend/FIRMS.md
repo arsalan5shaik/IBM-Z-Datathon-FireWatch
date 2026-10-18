@@ -1,5 +1,9 @@
 # NASA FIRMS satellite observations
 
+Latest controlled live/provider/API/browser results and deployment blockers:
+[LIVE_API_VERIFICATION.md](../docs/LIVE_API_VERIFICATION.md). Historical counts
+below describe their original verification time, not current observations.
+
 This feature adds `/api/v1/fires/live` to the existing FastAPI application. It does
 not create another app or modify the rolling forecast job. NASA FIRMS detects
 **thermal anomalies**, not confirmed wildfires or incident perimeters. Near-real-time
