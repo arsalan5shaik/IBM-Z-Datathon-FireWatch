@@ -58,7 +58,8 @@ The exact version-controlled FireWatch system prompt remains unchanged.
 Normal model responses allow one SDK retry, at most, within a wall-clock cap of
 `min(2 * OPENAI_TIMEOUT_SECONDS + 1, CHAT_TIMEOUT_SECONDS)` (51 s with current
 settings). The entire chat still has its separate 90 s deadline. No application
-retry loop was added. Safe logs contain only tool names, stage and elapsed time;
+retry loop was added. The first research attempt's failure status was not captured:
+the delay is consistent with a per-attempt timeout, but its cause is UNKNOWN. Safe logs contain only tool names, stage and elapsed time;
 no prompt, conversation, provider URL, key or tool arguments are logged.
 
 ### Measured usage and estimated cost - additional allowance only
@@ -66,14 +67,14 @@ no prompt, conversation, provider URL, key or tool arguments are logged.
 - Authorized maximum: 20 additional paid OpenAI attempts, four hosted searches.
 - Actual: 13 chat HTTP submissions; 11 SDK operations; **12 OpenAI HTTP attempts**
   including one SDK retry. Deterministic missing-artifact responses incur no call.
-- Two research operations returned three native search actions. One timed-out
+- Two research operations returned three native search actions. One unmetered
   research attempt before the SDK retry has unknown tool/token usage. Conservatively
   reserve the fourth search for that attempt: **further research was stopped**.
   The final ledger sets `research_allowance_closed=true`; counters were not reset.
   The unknown attempt may have executed zero or multiple native actions; the
   exact billable-action total cannot be certified from returned usage alone.
 - SDK-reported totals: **47,881 input tokens**, including **16,640 cached input**,
-  and **7,161 output tokens**. These exclude usage the timed-out attempt did not return.
+  and **7,161 output tokens**. These exclude any usage the retried attempt did not return.
 - At [gpt-5-mini pricing](https://developers.openai.com/api/docs/models/gpt-5-mini),
   the reported token component estimates **$0.02255**. Three observed search actions
   at [search pricing](https://developers.openai.com/api/docs/pricing) add an estimated
