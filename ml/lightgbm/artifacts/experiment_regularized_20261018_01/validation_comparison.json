@@ -1,0 +1,70 @@
+{
+  "experiment": "single_regularized_lightgbm_alternative",
+  "selection_metric": "validation MAE",
+  "test_data_accessed": false,
+  "test_data_used_for_selection": false,
+  "target_definition": "Historical gridMET daily Energy Release Component, fuel model G (ERC-G), unitless index; environmental fire danger, not ignition probability",
+  "feature_order": [
+    "tmmx_C",
+    "tmmn_C",
+    "rmin_pct",
+    "pr_mm_day",
+    "vs_m_s",
+    "min_elevation_m",
+    "max_elevation_m",
+    "day_of_year_sin",
+    "day_of_year_cos"
+  ],
+  "validation_period": {
+    "start": "2025-01-01",
+    "end": "2025-06-30",
+    "rows": 8558223
+  },
+  "original_model_dir": "ml/lightgbm/artifacts/model_20261018_045319",
+  "original_validation_metrics": {
+    "rows": 8558223,
+    "MAE": 10.225536170317804,
+    "RMSE": 13.530167522096388,
+    "R2": 0.7437743491968651
+  },
+  "regularized_validation_metrics": {
+    "rows": 8558223,
+    "MAE": 10.010650612482534,
+    "RMSE": 13.465630379315908,
+    "R2": 0.7462128458268429
+  },
+  "preferred_by_validation_MAE": "regularized",
+  "best_iteration": 159,
+  "training_seconds": 122.11808107300021,
+  "random_seed": 42,
+  "parameters": {
+    "boosting_type": "gbdt",
+    "class_weight": null,
+    "colsample_bytree": 1.0,
+    "importance_type": "split",
+    "learning_rate": 0.05,
+    "max_depth": 5,
+    "min_child_samples": 1500,
+    "min_child_weight": 0.001,
+    "min_split_gain": 0.0,
+    "n_estimators": 250,
+    "n_jobs": 4,
+    "num_leaves": 7,
+    "objective": "regression",
+    "random_state": 42,
+    "reg_alpha": 0.0,
+    "reg_lambda": 5.0,
+    "subsample": 1.0,
+    "subsample_for_bin": 200000,
+    "subsample_freq": 0,
+    "deterministic": true,
+    "force_col_wise": true,
+    "verbosity": -1,
+    "max_bin": 63
+  },
+  "versions": {
+    "lightgbm": "4.7.0",
+    "pandas": "2.1.4+dfsg",
+    "numpy": "1.26.4"
+  }
+}

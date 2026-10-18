@@ -83,6 +83,34 @@ python ml/lightgbm/pipeline.py train-partitioned \
 
 The split trains on 2024, validates on January-June 2025, and holds July-December 2025 for final test. Evaluation reports MAE, RMSE, R2, training-only cell/global-mean baselines, fit time, and best iteration. The export includes `model.txt`, ordered `feature_schema.json`, `evaluation.json`, split predictions, feature importance, and the grid mapping. Model quality is unknown until the LinuxONE command runs.
 
+## One controlled validation-only experiment
+
+`config.experiment_regularized.json` fixes seed 42 and tests one alternative: 7 leaves, depth 5, 1,500 minimum child samples, and L2 lambda 5. The fit has a 250-estimator ceiling, validation-L1 early stopping, and a 30-minute fit limit. It reads only the 2024 training and January-June 2025 validation tables; it never opens the test table. Run serially after the original fit, with a new output directory:
+
+```bash
+cd /home/linux1/firewatch
+source ~/firewatch-ml-venv/bin/activate
+python ml/lightgbm/experiment.py \\
+  --config ml/lightgbm/config.experiment_regularized.json \\
+  --prepared ml/lightgbm/artifacts/prepared_2024_2025 \\
+  --original-model ml/lightgbm/artifacts/model_2024_2025 \\
+  --output ml/lightgbm/artifacts/experiment_regularized_20261018_01
+```
+
+The separate output contains the alternative model, validation-only comparison, and gain-importance comparison. The report names the preferred model by validation MAE. The original model directory is read-only to this experiment.
+
+For retrospective geographic/month/elevation error summaries, upload the existing numeric GeoJSON, min/max elevation CSV, and verified mapping CSV plus manifest. Run `analyze_subgroups.py` against the original `test_predictions.csv`; it groups cells by polygon bounding-box midpoint latitude (north >= 40 degrees, central 36.5-40, south < 36.5) and by elevation tertiles computed from available mapped min/max values. This is descriptive held-out subgroup analysis, not a spatial-block holdout. A spatial-block holdout is not included in this deadline-bounded sprint.
+
+```bash
+python ml/lightgbm/analyze_subgroups.py \\
+  --predictions ml/lightgbm/artifacts/model_2024_2025/test_predictions.csv \\
+  --numeric-grid ml/weather_elevation/data/california_grid_numeric_id.geojson \\
+  --mapping ml/lightgbm/data/input/grid_id_mapping.csv \\
+  --mapping-manifest ml/lightgbm/data/input/grid_id_mapping.manifest.json \\
+  --elevation ml/weather_elevation/data/california_elevation_minmax_3km.csv \\
+  --output ml/lightgbm/artifacts/analysis_geographic_2025/subgroup_robustness.json
+```
+
 For batch inference, provide a CSV or CSV.GZ with `cell_id`, `date`, and every feature in the schema. The script reads feature files in chunks and can export native LightGBM per-feature contributions plus bias. This example uses held-out historical test features to verify inference; it is retrospective, not an operational forecast:
 
 ```bash

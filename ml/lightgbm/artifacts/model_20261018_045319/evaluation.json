@@ -1,0 +1,107 @@
+{
+  "target_definition": "Historical gridMET daily Energy Release Component, fuel model G (ERC-G), unitless index; environmental fire danger, not ignition probability",
+  "date_convention": "gridMET daily date (MST day; boundary 07:00 UTC); weather predictors shifted back one full gridMET day",
+  "weather_lag_days": 1,
+  "feature_schema_sha256": "7ec87fbce8afb3ee8263908d9050c152dd9f0dcc75238c37f373e3526f470f45",
+  "best_iteration": 53,
+  "parameters": {
+    "boosting_type": "gbdt",
+    "class_weight": null,
+    "colsample_bytree": 1.0,
+    "importance_type": "split",
+    "learning_rate": 0.05,
+    "max_depth": -1,
+    "min_child_samples": 1000,
+    "min_child_weight": 0.001,
+    "min_split_gain": 0.0,
+    "n_estimators": 250,
+    "n_jobs": 4,
+    "num_leaves": 15,
+    "objective": "regression",
+    "random_state": 42,
+    "reg_alpha": 0.0,
+    "reg_lambda": 1.0,
+    "subsample": 1.0,
+    "subsample_for_bin": 200000,
+    "subsample_freq": 0,
+    "deterministic": true,
+    "force_col_wise": true,
+    "verbosity": -1,
+    "max_bin": 63
+  },
+  "training_seconds": 72.64579042900004,
+  "selection": "early stopping on chronological validation MAE; test unused until final evaluation",
+  "pilot_only": false,
+  "production_ready": false,
+  "versions": {
+    "lightgbm": "4.7.0",
+    "pandas": "2.1.4+dfsg",
+    "numpy": "1.26.4",
+    "scikit-learn": "1.4.1.post1"
+  },
+  "splits": {
+    "train": {
+      "rows": 17305578,
+      "days": 366,
+      "first_date": "2024-01-01",
+      "last_date": "2024-12-31",
+      "lightgbm": {
+        "MAE": 9.249898805138669,
+        "RMSE": 11.71174916736299,
+        "R2": 0.8574470918594026
+      },
+      "baseline_train_cell_mean": {
+        "MAE": 21.255051941188857,
+        "RMSE": 24.62352497688596,
+        "R2": 0.36986586642738206
+      },
+      "baseline_train_global_mean": {
+        "MAE": 27.015150764944508,
+        "RMSE": 31.019423468039374,
+        "R2": -1.554312234475219e-14
+      }
+    },
+    "validation": {
+      "rows": 8558223,
+      "days": 181,
+      "first_date": "2025-01-01",
+      "last_date": "2025-06-30",
+      "lightgbm": {
+        "MAE": 10.225536170317802,
+        "RMSE": 13.53016752209638,
+        "R2": 0.7437743491968654
+      },
+      "baseline_train_cell_mean": {
+        "MAE": 14.489716817962403,
+        "RMSE": 17.77783841413344,
+        "R2": 0.5576417143289014
+      },
+      "baseline_train_global_mean": {
+        "MAE": 22.91170533238254,
+        "RMSE": 26.857195654406205,
+        "R2": -0.009572665328780205
+      }
+    },
+    "test": {
+      "rows": 8700072,
+      "days": 184,
+      "first_date": "2025-07-01",
+      "last_date": "2025-12-31",
+      "lightgbm": {
+        "MAE": 10.830041441550291,
+        "RMSE": 13.843439144515578,
+        "R2": 0.7555168435943362
+      },
+      "baseline_train_cell_mean": {
+        "MAE": 19.087099629027882,
+        "RMSE": 22.8343376118935,
+        "R2": 0.33482213635976643
+      },
+      "baseline_train_global_mean": {
+        "MAE": 23.5132285743674,
+        "RMSE": 28.054763691776987,
+        "R2": -0.004093560852487466
+      }
+    }
+  }
+}
