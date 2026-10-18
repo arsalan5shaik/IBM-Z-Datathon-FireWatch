@@ -227,3 +227,23 @@ wheel availability only, not ABI behavior or the entire dependency tree.
 Run `uv sync --locked`, imports, the full backend suite and a bounded real-key
 smoke on the actual LinuxONE host; verify glibc, TLS/egress, writable shared cache,
 SQLite locking and gateway access there. Runtime compatibility remains UNVERIFIED.
+
+## PR #12 acceptance follow-up
+
+See `docs/LIVE_API_VERIFICATION.md` for the additional live run and exact limits.
+Missing-model-only questions now return validated availability results directly:
+`mode=data_unavailable`, `model=null`, registered sources, no OpenAI generation.
+This is an additive response mode; the frontend uses its normal API response path.
+It is not an inference result or an offline fixture. Tool/citation/numeric/secret
+validation remains enabled. Follow-up buttons are server-owned supported actions.
+Completed preflight tools are not offered repeatedly. Model responses have one
+SDK retry and a wall-clock cap across attempts/backoff, inside the whole-chat cap.
+Per-stage logs contain only tool name, duration and research flag.
+
+Research accepts citations only from completed native retrieval actions; partial
+actions are disclosed. One local official preparedness retrieval succeeded, but
+57-second latency, mixed-action revalidation and remaining live science coverage
+keep full demo acceptance BLOCKED. Three observed search actions plus one unknown
+retry attempt consumed the conservative four-search allowance. No further research
+was run. The new private ledger uses FIREWATCH_VERIFY_SESSION to preserve the
+initial run. Never reset its counters to get more paid tests.
