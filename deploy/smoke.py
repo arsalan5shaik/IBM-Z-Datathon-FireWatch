@@ -101,7 +101,7 @@ def main():
                 "NASA_FIRMS_MAP_KEY",
             ):
                 assert not injected.get(secret), f"Unexpected smoke credential: {secret}"
-        # Real SQLite writes, shared UID permissions and cross-process locking;
+        # Real SQLite writes, shared UID permissions and cross-process reads;
         # the marker has no application/provider data and remains in this test volume.
         compose(
             "exec",

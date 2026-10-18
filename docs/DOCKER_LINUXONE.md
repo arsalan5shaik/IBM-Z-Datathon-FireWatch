@@ -60,7 +60,12 @@ Node tooling runs on `BUILDPLATFORM`; only architecture-independent HTML/CSS/JS
 and geodata enter the target Nginx image. This supports cross-building on x86 and
 native building on LinuxONE. `npm ci` uses `package-lock.json`, Playwright browser
 downloads are disabled, and Vite is built with `VITE_API_BASE_URL=/api/v1` and
-`--base=/`. The image is designed to be served from the site root. Browser code
+the Docker-specific `vite.docker.config.ts` (base `/`). Lightning CSS's locked
+package has no s390x native binary: this configuration disables **CSS minification
+only on s390x builders**, using the existing PostCSS pipeline while retaining
+JavaScript minification. Native LinuxONE builds therefore emit somewhat larger
+CSS; cross-builds on x86 retain the default CSS minifier. No dependency is removed
+or substituted. The image is designed to be served from the site root. Browser code
 never uses Docker service names. Missing assets return 404; other routes get SPA
 fallback with absolute asset URLs. No frontend secret build arguments exist.
 
@@ -374,7 +379,10 @@ Troubleshooting:
 
 `.github/workflows/docker-linuxone.yml` validates Dockerfiles/Compose, builds both
 runtime architectures, runs isolated Compose smoke checks, installs the locked
-backend test environment and executes the backend suite on each architecture.
+backend test environment and executes the full backend suite on amd64 plus unit
+and contract tests on s390x. Full s390x integration tests and an emulated native
+s390x frontend-tooling build run on manual dispatch: forecast publication tests
+perform many fsync operations and are substantially slower under QEMU.
 Frontend tests are a separate job; failures are not hidden by packaging success.
 Changes touching runtime code trigger it on pull requests; manual dispatch is
 available. Read-only GitHub permissions, no provider credentials, no registry

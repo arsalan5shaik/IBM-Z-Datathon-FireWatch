@@ -84,8 +84,17 @@ provider verification. The optional `deploy/browser-smoke.mjs` reproduces it.
   provider caches, local virtualenvs and SQLite files were absent from every layer.
   This is an exclusion test, not an exhaustive secret detector or CVE scan.
 
-The s390x backend suite and additional emulated frontend build-tool check are
-recorded below when completed. Image identities refer to the final runtime builds;
+An additional emulated native frontend build exposed a real build-time blocker:
+locked `lightningcss==1.33.0` has no linux-s390x native module. The Docker-only Vite
+configuration disables CSS minification on s390x builders (retaining PostCSS,
+JavaScript minification and the complete lock). After the fix, s390x Node 24 ran
+`npm ci`, TypeScript and the complete production Vite build successfully. CSS grew
+from approximately 40.9 KB to 55.1 KB for the app bundle (gzip 9.6 KB to 10.8 KB).
+Cross-building on amd64 keeps the normal minifier. This test ran actual s390x
+tool binaries under QEMU; it does not establish native IBM hardware execution.
+
+The full s390x backend suite is recorded below when completed.
+Image identities refer to the final runtime builds;
 locally built test/compatibility images are not deployment releases.
 
 ## Remaining deployment gates

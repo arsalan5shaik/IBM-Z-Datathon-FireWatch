@@ -14,7 +14,7 @@ FROM sources AS test
 CMD ["npm", "test"]
 
 FROM sources AS build
-RUN npm run typecheck && npm run build -- --base=/
+RUN npm run typecheck && npm run build -- --config vite.docker.config.ts
 
 FROM ${NGINX_IMAGE} AS runtime
 COPY deploy/nginx.conf /etc/nginx/nginx.conf

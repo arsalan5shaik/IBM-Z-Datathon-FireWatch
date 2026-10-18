@@ -48,7 +48,14 @@ jobs:
       - name: Build locked backend test image
         run: docker buildx build --platform linux/${{ matrix.arch }} --target test --load -f backend/Dockerfile -t firewatch-backend-test:${{ matrix.arch }} .
       - name: Backend suite on target architecture (mock transports)
+        if: matrix.arch == 'amd64' || github.event_name == 'workflow_dispatch'
         run: docker run --rm --platform linux/${{ matrix.arch }} --network none firewatch-backend-test:${{ matrix.arch }}
+      - name: s390x unit and contract tests (full suite on manual dispatch)
+        if: matrix.arch == 's390x' && github.event_name != 'workflow_dispatch'
+        run: docker run --rm --platform linux/s390x --network none firewatch-backend-test:s390x python -m pytest -q -p no:cacheprovider tests/unit tests/contracts
+      - name: Emulated native s390x frontend tooling (manual dispatch)
+        if: matrix.arch == 's390x' && github.event_name == 'workflow_dispatch'
+        run: docker buildx build --platform linux/s390x --build-arg BUILDPLATFORM=linux/s390x --target build --load -f frontend/Dockerfile -t firewatch-frontend-build:s390x .
       - name: Backend lint and format
         if: matrix.arch == 'amd64'
         run: |
