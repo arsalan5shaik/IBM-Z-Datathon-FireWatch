@@ -1,5 +1,24 @@
 # Backend implementation status
 
+## Live API verification: 2026-10-18
+
+- Branch `JS_feat/live-api-verification`, isolated worktree from main `a409571`.
+  Scoped corrections pushed in `69070ec`; no teammate frontend/ML implementation
+  or shared contracts changed. Existing main checkout changes remain preserved.
+- Real NASA refresh PASS: NOAA-20 292 / NOAA-21 347 retained CA observations,
+  latest acquisition 2026-10-17T21:31:00Z, endpoints/loop/metadata PASS.
+- Real gpt-5-mini Responses, function calls and hosted research connectivity PASS;
+  full live chatbot acceptance FAIL: elevated-risk retest timed out; research
+  corrections require a fresh authorized live verification run. Fifteen chat
+  requests and three observed native research actions reached the initial cap.
+- Corrected timestamp/query scope, compact detection transport, verified numeric
+  conversion/context, preparedness guard and multiple completed research actions.
+  Nine new regressions/job tests; complete backend 363 PASS, frontend 62 PASS,
+  Ruff/typecheck/build/both smoke modes PASS. Final real Chrome five checks PASS.
+- PR review required; do not auto-merge with unresolved live gates. Docker and
+  LinuxONE deployment readiness remain NO. Full evidence/commands/limitations:
+  `docs/LIVE_API_VERIFICATION.md`. No Docker files or paid infrastructure created.
+
 ## Current feature: ai-chatbot
 
 - Branch `JS_feat/ai-chatbot`, isolated `firewatch-chat-worktree`; based on main

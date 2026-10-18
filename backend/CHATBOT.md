@@ -138,7 +138,9 @@ Official documentation checked during implementation:
 
 Responses/function calling/structured-output support is documented. Hosted search
 uses the supported Responses controls with low reasoning, not minimal reasoning.
-Account-specific gpt-5-mini/search access remains unverified without a key. If
+Local gpt-5-mini/search access was verified on 2026-10-18 with real credentials;
+the complete live acceptance gate remains open. See the
+[live verification report](../docs/LIVE_API_VERIFICATION.md). If
 the configured model/tool is rejected, the API returns
 `chat_model_or_tool_unsupported`; it does not switch models or fake research.
 
@@ -185,11 +187,11 @@ available, so the public AI remains BLOCKED/offline demo until that hosting exis
 |---|---|
 | California locations | Available: authoritative catalog, boundaries, real IDs |
 | Weather/wind | Available: real Open-Meteo cache used directly by tools |
-| NASA FIRMS | Cache consumer available; local real cache/key unavailable |
+| NASA FIRMS | Real two-product ingestion and cached chat reads verified locally |
 | ML risk | Validated live-artifact consumer; real artifacts unavailable |
 | SHAP | Unavailable; no authoritative service/contract connected |
-| OpenAI Responses | Implemented and deterministically tested; live key BLOCKED |
-| Hosted external research | Implemented with verified-citation transport; live key BLOCKED |
+| OpenAI Responses | Live gpt-5-mini verified; broader reliability acceptance FAIL |
+| Hosted external research | Live retrieval verified; corrected multi-action path requires live revalidation |
 | Public hosted chatbot | BLOCKED: HTTPS backend + authenticated gateway absent |
 
 Unit tests mock OpenAI and never incur paid calls. Real browser tests use the
@@ -204,6 +206,15 @@ Explicit optional paid smoke: `uv run --no-sync python scripts/chat_live_smoke.p
 It prints BLOCKED with no key. With a configured key, it performs bounded Stockton
 weather and Camp Fire research requests plus a no-cost scope refusal. It verifies
 actual Responses results and citation metadata. It is never run in CI.
+
+The 2026-10-18 live verification reached its 15-chat/three-action budget. Do not
+run more paid tests under that authorization. The opt-in
+`scripts/live_verification_server.py` and `frontend/scripts/verify-live-apis.mjs`
+provide real-provider verification and private usage counters, not mock responses.
+Native search may return multiple completed search/open/find actions despite the
+requested `max_tool_calls=1`. The validator accepts completed actions and still
+requires citations to match retrieved URLs and native annotations. Research-call
+settings cap retrieval requests, not a guaranteed exact native action count.
 
 ## LinuxONE / s390x
 
