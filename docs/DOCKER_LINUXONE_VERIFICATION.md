@@ -66,6 +66,10 @@ provider verification. The optional `deploy/browser-smoke.mjs` reproduces it.
 - Backend amd64 suite: **354 passed**, one existing Starlette/httpx deprecation
   warning. Network disabled for the test container; tests also block real HTTP
   provider transports. Ruff lint and format pass (73 existing backend Python files).
+- Full backend s390x suite: **354 passed**, one identical deprecation warning,
+  **491.12 seconds** under QEMU, with network disabled. This includes forecast
+  publication/recovery, SQLite indexes, POSIX process locking, API contracts,
+  provider mocks and chatbot unit tests; it is not live API acceptance.
 - Backend process smoke: both normal missing-data mode and explicit fixture mode
   passed, including startup/readiness, errors, CORS, OpenAPI and graceful shutdown.
 - Deployment Python helpers: Ruff lint and format pass using backend configuration.
@@ -93,9 +97,38 @@ from approximately 40.9 KB to 55.1 KB for the app bundle (gzip 9.6 KB to 10.8 KB
 Cross-building on amd64 keeps the normal minifier. This test ran actual s390x
 tool binaries under QEMU; it does not establish native IBM hardware execution.
 
-The full s390x backend suite is recorded below when completed.
 Image identities refer to the final runtime builds;
 locally built test/compatibility images are not deployment releases.
+
+## Local image handoff
+
+| Local image | Image identity |
+|---|---|
+| `firewatch-backend:amd64` | `sha256:33d4c042155e1fd634a51660a385ebe4d1d0d2facb130d628489851c6c9e9e9e` |
+| `firewatch-frontend:amd64` | `sha256:7d97212495fd3a533a5cb6713819a9c8c542dee04baec3ceef00c11d0dbf986f` |
+| `firewatch-backend:s390x` | `sha256:c0ea1d557bcd62885f73e3d412d241f7da9cbcb81f403f31e7ac8ba51286ae44` |
+| `firewatch-frontend:s390x` | `sha256:300aabad6eadb51f5a7a34bb00ae51572e00bfd62f7425e123c736f8402a0d28` |
+
+The s390x identities are the platform manifests after archive reload. The build's
+attestation index has a different digest; `save --platform` excludes that wrapper.
+
+The final local s390x frontend was additionally built with
+`--build-arg BUILDPLATFORM=linux/s390x`, so the handoff image contains the assets
+produced by the verified emulated s390x Node toolchain (CSS-minification fallback).
+Default cross-builds may have different provenance/image identities and minified
+CSS, while still running the same target-architecture Nginx and application code.
+
+Both s390x images were saved into an **88,678,912-byte** local Docker archive and
+successfully loaded back using `docker image load --platform linux/s390x`:
+
+```text
+firewatch-s390x.tar
+SHA256 a3804d22a30ab879c84208debb62f22dbff4060a75cdfd67b5a503131334c8cc
+```
+
+The archive and checksum are outside Git in the local task's temporary artifact
+directory. Transfer them through an approved channel to the LinuxONE host and
+verify the checksum before loading. No registry images were published.
 
 ## Remaining deployment gates
 
