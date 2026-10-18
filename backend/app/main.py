@@ -8,6 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 
 from app.api.v1.chat import router as chat_router
+from app.api.v1.erc import router as erc_router
 from app.api.v1.fires import router as fires_router
 from app.api.v1.forecasts import router as forecast_router
 from app.api.v1.locations import router as locations_router
@@ -92,6 +93,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(router)
     app.include_router(health_router)
     app.include_router(forecast_router)
+    app.include_router(erc_router)
     app.include_router(fires_router)
     app.include_router(weather_router)
     app.include_router(locations_router)

@@ -7,6 +7,9 @@ import { sample } from '../state/data';
 import { getState, setState, validTimeOf } from '../state/store';
 import type { PlaceResult } from '../types';
 
+// Exercise API-mode safeguards independently of the developer/build environment.
+vi.mock('../config', async () => ({ ...await vi.importActual('../config'), API_BASE: '/api/v1' }));
+
 beforeAll(async () => {
   vi.stubGlobal('fetch', async (url: string) => {
     const path = resolve(import.meta.dirname, '../../public', String(url).replace(/^\.?\//, ''));
@@ -34,7 +37,7 @@ const ask = async (q: string, ctx = null as Parameters<typeof answerOffline>[2])
   return res.answer;
 };
 
-describe('offline assistant', () => {
+describe('offline assistant with an API configured', () => {
   it('answers place + day questions from the data', async () => {
     const a = await ask('Why is Stockton high risk on Day 4?');
     expect(a).toMatch(/Stockton/);
@@ -54,7 +57,9 @@ describe('offline assistant', () => {
   });
   it('handles statewide, glossary, safety and out-of-state questions', async () => {
     expect(await ask('Where is the highest risk right now?')).toMatch(/County/);
-    expect(await ask('What is SHAP?')).toMatch(/log-odds/);
+    const shap = await ask('What is SHAP?');
+    expect(shap).toMatch(/model endpoint.*declared output scale/);
+    expect(shap).not.toMatch(/log-odds|percentage points/);
     expect(await ask('Should I evacuate?')).toMatch(/911/);
     expect(await ask('Is Reno at risk?')).toMatch(/only covers California/);
     expect(await ask('what does FRP mean')).toMatch(/radiative/);

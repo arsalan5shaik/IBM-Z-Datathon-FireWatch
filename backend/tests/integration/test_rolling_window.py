@@ -17,7 +17,7 @@ from app.config import Settings
 from app.errors import APIError
 from app.jobs.roll_window import Revision, Roller
 from app.main import create_app
-from app.persistence.atomic import JobLocked, atomic_json, single_owner
+from app.persistence.atomic import JobLocked, atomic_json
 from app.persistence.sqlite import read_job
 from app.schemas.forecast import Manifest
 from app.services.forecast_store import ForecastStore
@@ -25,6 +25,7 @@ from app.services.jsonio import read_json
 from app.services.score_index import index_path
 from app.services.time import iso, next_hour
 from tests.conftest_forecasts import EXAMPLES
+from tests.lock_holder import hold_lock
 
 NOW = datetime(2026, 3, 8, 7, 30, tzinfo=UTC)
 
@@ -303,12 +304,6 @@ def test_utc_windows_across_dst_and_year_boundary(deployment, now):
     store = ForecastStore(settings)
     assert not store.metadata(current, now)["stale"]
     assert store.metadata(current, next_hour(now))["stale"]
-
-
-def hold_lock(path, ready, release):
-    with single_owner(path):
-        ready.set()
-        release.wait(20)
 
 
 def test_process_lock_and_recovery_after_owner_dies(deployment):

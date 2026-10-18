@@ -1,0 +1,94 @@
+name: firewatch
+
+x-backend: &backend
+  image: firewatch-backend:${IMAGE_TAG:-local}
+  platform: ${FIREWATCH_PLATFORM:-linux/amd64}
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+    target: runtime
+  init: true
+  restart: unless-stopped
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  stop_grace_period: 30s
+  volumes:
+    - runtime-data:/data
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: '3'
+
+x-environment: &environment
+  REPO_ROOT: /app
+  SHARED_DATA_DIR: /data
+  SQLITE_PATH: /data/firewatch.sqlite3
+  FIRMS_REFRESH_MINUTES: ${FIRMS_REFRESH_MINUTES:-15}
+  FIRMS_SOURCES: '["VIIRS_NOAA20_NRT","VIIRS_NOAA21_NRT"]'
+  JOB_ENABLED: 'false'
+  SCHEDULER_OWNER: unassigned
+  ALLOW_FIXTURE_DATA: 'false'
+  CORS_ORIGINS: '[]'
+  CHAT_ACCESS_MODE: trusted_proxy
+  CHAT_PROXY_TOKEN: ''
+  OPENAI_API_KEY: ''
+  LLM_API_KEY: ''
+
+services:
+  backend:
+    <<: *backend
+    environment:
+      <<: *environment
+    networks: [api]
+
+  firms-worker:
+    <<: *backend
+    command: [python, /app/deploy/worker.py]
+    environment:
+      <<: *environment
+      NASA_FIRMS_MAP_KEY: ${NASA_FIRMS_MAP_KEY:-}
+    healthcheck:
+      test: [CMD, python, /app/deploy/healthcheck.py, worker]
+      interval: 30s
+      timeout: 15s
+      start_period: 90s
+      retries: 3
+    deploy:
+      replicas: 1
+    networks: [api]
+
+  frontend:
+    image: firewatch-frontend:${IMAGE_TAG:-local}
+    platform: ${FIREWATCH_PLATFORM:-linux/amd64}
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: runtime
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 30s
+    ports:
+      - '${FIREWATCH_BIND_ADDRESS:-127.0.0.1}:${FIREWATCH_PORT:-8080}:8080'
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [api]
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+networks:
+  api:
+volumes:
+  runtime-data:
