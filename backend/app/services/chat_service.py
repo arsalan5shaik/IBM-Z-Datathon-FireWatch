@@ -201,12 +201,6 @@ class ChatService:
         )
         if FOLLOWUP.search(request.message) and prior:
             routing_message = prior + "; follow-up: " + request.message
-        if not self.client.key:
-            raise APIError(
-                "chat_not_configured",
-                "Set OPENAI_API_KEY on the FastAPI server; live AI is unavailable",
-                503,
-            )
         topics = chat_reference.topics(request.message)
         if chat_reference.definition_only(request.message, mentioned):
             # FRP, VIIRS confidence and hotspot semantics are fixed by NASA FIRMS.
@@ -226,6 +220,12 @@ class ChatService:
             )
             reply = self.finalize(final, tools, request)
             return reply.model_copy(update={"model": None, "mode": "reference"})
+        if not self.client.key:
+            raise APIError(
+                "chat_not_configured",
+                "Set OPENAI_API_KEY on the FastAPI server; live AI is unavailable",
+                503,
+            )
         time_expression = (
             request.message
             if re.search(r"tomorrow|today|weekend|\d{4}-\d{2}-\d{2}|\bnow\b", request.message, re.I)

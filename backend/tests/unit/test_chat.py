@@ -672,10 +672,15 @@ def test_client_disconnect_cancels_model_work_and_releases_shared_lease(setup):
 
     app, _ = setup
     cancelled = []
+    started = asyncio.Event()
+    app.state.chat_limits.settings = app.state.settings.model_copy(
+        update={"chat_max_concurrent_requests": 1}
+    )
 
     class SlowClient(MockResponses):
         async def create(self, **kwargs):
             try:
+                started.set()
                 await asyncio.sleep(60)
             finally:
                 cancelled.append(True)
@@ -684,7 +689,8 @@ def test_client_disconnect_cancels_model_work_and_releases_shared_lease(setup):
 
     async def scenario():
         async def receive():
-            await asyncio.sleep(0.05)
+            # Disconnect during model work, regardless of preflight/runner speed.
+            await asyncio.wait_for(started.wait(), timeout=10)
             return {"type": "http.disconnect"}
 
         req = Request(
@@ -705,8 +711,8 @@ def test_client_disconnect_cancels_model_work_and_releases_shared_lease(setup):
         assert error.value.code == "chat_client_disconnected"
 
     run(scenario())
-    assert cancelled
-    # A new lease is accepted after cancellation (concurrency limit is two).
+    assert cancelled == [True]
+    # With a single slot, this also proves the canceled request's lease was released.
     lease = app.state.chat_limits.acquire("another-user")
     app.state.chat_limits.release(lease)
 
