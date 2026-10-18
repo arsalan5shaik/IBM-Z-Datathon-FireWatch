@@ -56,7 +56,8 @@ class ChatRequest(StrictModel):
 
 class ChatSource(StrictModel):
     id: str
-    kind: Literal["firewatch", "research"]
+    # reference: version-controlled official definitions, reviewed (not fetched live).
+    kind: Literal["firewatch", "research", "reference"]
     title: str
     provider: str
     url: str | None = None
@@ -81,7 +82,9 @@ class ChatResponse(StrictModel):
     suggested_questions: list[str] = Field(default_factory=list, max_length=4)
     grounding: list[dict] = Field(default_factory=list)
     model: str | None = None
-    mode: Literal["openai", "scope_refusal", "clarification", "data_unavailable"] = "openai"
+    mode: Literal["openai", "scope_refusal", "clarification", "data_unavailable", "reference"] = (
+        "openai"
+    )
 
 
 class ToolArgs(StrictModel):

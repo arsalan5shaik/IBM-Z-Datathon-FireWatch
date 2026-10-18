@@ -939,7 +939,6 @@ def test_followups_are_server_owned_supported_actions(setup):
 @pytest.mark.parametrize(
     "question",
     [
-        "What does fire radiative power mean?",
         "How does wind affect wildfire spread?",
         "Where can I find official California wildfire incident updates?",
     ],

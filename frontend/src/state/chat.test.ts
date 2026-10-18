@@ -123,6 +123,17 @@ describe('FireWatch backend assistant', () => {
     expect(unsafe).toContain('&lt;script&gt;');
   });
 
+  it('labels official reference definitions as reviewed, not retrieved, and keeps the URL allowlist', () => {
+    const reference: ChatSource = { ...source, id: 'ref-firms-viirs', kind: 'reference', title: 'NASA FIRMS VIIRS 375 m active fire attributes',
+      provider: 'NASA FIRMS', url: 'https://firms.modaps.eosdis.nasa.gov/content/descriptions/FIRMS_VIIRS_Firehotspots.html' };
+    const html = renderToStaticMarkup(createElement(ChatSources, { sources: [reference] }));
+    expect(html).toContain('Official reference'); expect(html).toContain('Reviewed:');
+    expect(html).not.toContain('Retrieved:'); expect(html).not.toContain('Published:');
+    expect(html).toContain('href="https://firms.modaps.eosdis.nasa.gov/');
+    expect(safeSourceUrl({ ...reference, url: 'https://nasa.gov.attacker.test/' })).toBeNull();
+    expect(safeSourceUrl({ ...reference, kind: 'firewatch' })).toBeNull();
+  });
+
   it('uses canonical chat API schema, carries history and parses source metadata', async () => {
     let body: Record<string, unknown> = {};
     vi.stubGlobal('fetch', async (_input: string, init: RequestInit) => {

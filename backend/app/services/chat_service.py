@@ -9,6 +9,7 @@ from time import perf_counter
 from app.errors import APIError
 from app.prompts.firewatch_system import FIREWATCH_SYSTEM_PROMPT
 from app.schemas.chat import ChatResponse, FinalAnswer
+from app.services import chat_reference
 from app.services.chat_research import canonical_url, verified_url
 from app.services.chat_time import forecast_hour, resolve_time
 from app.services.chat_tools import ChatTools, mentioned_locations, tool_definitions
@@ -30,6 +31,7 @@ SCOPE = re.compile(
         "wildfire|\\bfire\\b|\\bfires\\b|\\brisk\\b|weather|wind|humid|precipitat|d"
         "rought|vegetation|ignition|evacuat|shelter|emergency|smoke|air "
         "quality|shap|firms|ecolog|prepared|cal fire|firewatch|satellite|hotspot|detection"
+        "|\\bfrp\\b|radiative|viirs|modis|thermal anomal"
     ),
     re.I,
 )
@@ -166,6 +168,25 @@ class ChatService:
                 "Set OPENAI_API_KEY on the FastAPI server; live AI is unavailable",
                 503,
             )
+        topics = chat_reference.topics(request.message)
+        if chat_reference.definition_only(request.message, mentioned):
+            # FRP, VIIRS confidence and hotspot semantics are fixed by NASA FIRMS.
+            # Answer from the reviewed official text: no paid model or search call,
+            # and the ordinary citation/numeric validator still checks the result.
+            # A definition ("hotspot vs confirmed wildfire") needs no live research;
+            # current incidents/orders never reach this branch (definition_only).
+            tools.needs_research = False
+            for topic in topics:
+                tools.reference(topic)
+            final = FinalAnswer(
+                within_scope=True,
+                answer="\n\n".join(chat_reference.ANSWERS[topic] for topic in topics),
+                source_ids=[key for key, row in tools.sources.items() if row.kind == "reference"],
+                limitations=[],
+                suggested_questions=[],
+            )
+            reply = self.finalize(final, tools, request)
+            return reply.model_copy(update={"model": None, "mode": "reference"})
         time_expression = (
             request.message
             if re.search(r"tomorrow|today|weekend|\d{4}-\d{2}-\d{2}|\bnow\b", request.message, re.I)
@@ -205,6 +226,9 @@ class ChatService:
             preflight.append(await tools.execute("get_risk", "{}"))
         if "shap" in question or ("why" in question and "risk" in question):
             preflight.append(await tools.execute("get_shap", "{}"))
+        for topic in topics:
+            # Official definitions accompany data answers (e.g. detection confidence).
+            preflight.append(tools.reference(topic))
         if tools.needs_research:
             query = routing_message + (
                 f"; selected California location: {tools.location.display_name}"
@@ -322,7 +346,8 @@ class ChatService:
             + """
 
 Transport rules: output the required JSON format. Cite facts using [source_id]
-from server-registered FireWatch results or actual research sources. source_ids
+from server-registered FireWatch results, official reference definitions (ref-*)
+or actual research sources. source_ids
 must contain only those IDs. Never invent URLs or cite client history. Unknown
 publication times remain unknown. Never call a function not in the provided list.
 Use actual available FireWatch data before research. Do not research simple
@@ -408,7 +433,7 @@ the server supplies supported follow-ups. Do not append 'I can' action menus.
         if any(key not in tools.sources for key in final.source_ids):
             raise APIError("chat_citation_invalid", "AI cited an unverified source", 502)
         cited = set(final.source_ids)
-        inline = set(re.findall(r"\[((?:fw|research)-[^\]]+)\]", answer))
+        inline = set(re.findall(r"\[((?:fw|research|ref)-[^\]]+)\]", answer))
         if not inline <= cited:
             raise APIError("chat_citation_invalid", "AI inline citation is unverified", 502)
         # Canonical comparison: a tracking parameter or fragment does not make a

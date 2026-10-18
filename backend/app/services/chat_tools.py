@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from app.errors import APIError
 from app.schemas.chat import ChatSource, ResearchArgs, SearchArgs, TimeArgs, ToolArgs
+from app.services.chat_reference import ANSWERS, REVIEWED_AT, SOURCES, evidence
 from app.services.chat_research import research
 from app.services.chat_time import forecast_hour, resolve_time
 from app.services.forecast_store import category
@@ -126,13 +127,15 @@ class ChatTools:
                 re.I,
             )
         )
+        # FRP/confidence/hotspot definitions come from the official FIRMS reference
+        # (chat_reference), so they no longer require paid research by themselves.
         self.needs_research = self.emergency or bool(
             re.search(
                 (
                     "confirmed|active wildfires|camp "
                     "fire|histor|caused|warnings|policy|science|prepared|prevent|air "
                     "quality|smoke"
-                    "|radiative power|\\bfrp\\b|how.*wind.*(?:affect|spread)"
+                    "|how.*wind.*(?:affect|spread)"
                     "|official.*(?:incident|updates)"
                 ),
                 request.message,
@@ -170,6 +173,33 @@ class ChatTools:
         )
         self.evidence[key] = result
         return result | {"source_id": key}
+
+    def reference(self, topic):
+        """Register official FIRMS definitions: no network, model or provider call."""
+        rows = []
+        for source_id in dict.fromkeys(re.findall(r"\[(ref-[^\]]+)\]", ANSWERS[topic])):
+            if source_id not in self.sources:
+                page = SOURCES[source_id]
+                self.sources[source_id] = ChatSource(
+                    id=source_id,
+                    kind="reference",
+                    title=page["title"],
+                    provider="NASA FIRMS",
+                    url=page["url"],
+                    retrieved_at=REVIEWED_AT,
+                    freshness=f"Official definition reviewed {REVIEWED_AT[:10]}; not fetched live",
+                    scope="Definition; not location-specific",
+                )
+                self.evidence[source_id] = evidence(source_id)
+            rows.append(self.evidence[source_id] | {"source_id": source_id})
+        if "firewatch_reference" not in self.used:
+            self.used.append("firewatch_reference")
+        return {
+            "status": "available",
+            "topic": topic,
+            "definition": ANSWERS[topic],
+            "sources": rows,
+        }
 
     async def execute(self, name, arguments):
         started = perf_counter()

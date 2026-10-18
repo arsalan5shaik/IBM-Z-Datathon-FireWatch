@@ -12,8 +12,10 @@ from openai.types.responses import Response
 
 from app.errors import APIError
 from app.schemas.chat import ChatRequest
-from app.services.chat_research import research
+from app.services.chat_reference import definition_only
+from app.services.chat_research import research, verified_url
 from app.services.chat_service import ChatService
+from app.services.chat_tools import mentioned_locations
 from app.services.openai_client import TRACE, ChatTrace, ResponsesClient
 from tests.unit.test_chat import (
     NOW,
@@ -365,3 +367,85 @@ def test_unavailable_prediction_notice_names_the_actual_area(setup):  # noqa: F8
         instance.answer(ChatRequest(message="What is the wildfire risk?", selected_hour=NOW))
     )
     assert "unavailable for California" in unscoped.answer
+
+
+# ---- Official FIRMS reference definitions ------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "question,required,source",
+    [
+        (
+            "What does fire radiative power mean?",
+            ["megawatts (MW)", "not acreage", "probability of fire", "proxy of fire intensity"],
+            "ref-firms-viirs",
+        ),
+        ("What is FRP?", ["megawatts (MW)"], "ref-firms-faq"),
+        (
+            "What does nominal confidence mean for this VIIRS detection?",
+            ["nominal (n)", "does not mean low", "not numeric probabilities", ">15 K"],
+            "ref-firms-viirs",
+        ),
+        (
+            "What is the difference between a satellite hotspot and a confirmed wildfire?",
+            ["not a confirmed wildfire", "375 m", "official incident reports", "gas-well flares"],
+            "ref-firms-faq",
+        ),
+    ],
+)
+def test_firms_definitions_are_official_reference_answers_without_model(
+    setup,  # noqa: F811
+    question,
+    required,
+    source,
+):
+    instance, client, provider = service(setup)
+    result = run(instance.answer(request(question)))
+    assert result.mode == "reference" and result.model is None
+    assert client.calls == [] and provider.calls == 0
+    assert result.tools_used == ["firewatch_reference"]
+    assert all(text in result.answer for text in required), result.answer
+    refs = {row.id: row for row in result.sources}
+    assert refs[source].kind == "reference" and refs[source].url in result.answer
+    assert all(verified_url(row.url) for row in refs.values())
+    assert "not fetched live" in refs[source].freshness
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "What is the FRP of the latest detections near Sacramento?",
+        "Show recent hotspots and what their confidence means",
+        "Is the FRP elevated today?",
+        "What does low confidence mean for wildfire risk?",
+    ],
+)
+def test_data_requests_about_firms_fields_are_not_definition_only(setup, question):  # noqa: F811
+    mentioned = mentioned_locations(setup[0].state.locations, question)
+    assert not definition_only(question, mentioned)
+
+
+def test_detection_answer_receives_official_confidence_definition(setup):  # noqa: F811
+    from tests.integration.test_fires import Provider, observation
+
+    app, _ = setup
+    run(app.state.fires.refresh(now=NOW, client=Provider([observation()])))
+    instance, client, _ = service(
+        setup,
+        final(
+            "Detections use nominal (n) confidence, not low. [fw-1] [ref-firms-viirs]",
+            ["fw-1", "ref-firms-viirs"],
+        ),
+    )
+    result = run(
+        instance.answer(
+            ChatRequest(
+                message="What do the confidence values of recent satellite detections mean?",
+                selected_hour=NOW,
+            )
+        )
+    )
+    payload = json.loads(client.calls[0]["input"][0]["content"])
+    topics = [row.get("topic") for row in payload["server_context"]["actual_firewatch_results"]]
+    assert "confidence" in topics and result.tools_used[0] == "get_detections"
+    assert "firms.modaps.eosdis.nasa.gov" in result.answer
