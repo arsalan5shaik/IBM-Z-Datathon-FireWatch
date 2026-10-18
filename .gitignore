@@ -20,3 +20,6 @@ shared/data/weather-inputs/
 *.sqlite
 *.sqlite3
 *.sqlite3-*
+
+# Generated V6 forecast snapshots
+shared/data/erc-v6/
