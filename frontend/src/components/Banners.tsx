@@ -7,7 +7,6 @@ import { useStore } from '../state/store';
 export function Banners() {
   const online = useStore((s) => s.online);
   const fallback = useStore((s) => [s.fires.origin, s.risk.origin, s.weather.origin].includes('fallback'));
-  const riskError = useStore((s) => s.risk.state === 'error' && !s.risk.data);
   const firesError = useStore((s) => s.fires.state === 'error' && !s.fires.data);
   const frozen = useStore((s) => (s.risk.data?.metadata.frames ?? 2) === 1);
   const terrain = useStore((s) => s.map.terrainError && (s.view === '3d' || s.basemap === 'terrain'));
@@ -35,11 +34,11 @@ export function Banners() {
         </button>
       ),
     });
-  if (riskError || firesError)
+  if (firesError)
     items.push({
       id: 'error',
       icon: <AlertTriangle size={15} />,
-      text: riskError ? 'Model forecast unavailable — awaiting validated ML data.' : 'Satellite observations unavailable; this does not establish whether hotspots are present.',
+      text: 'Satellite observations unavailable; this does not establish whether hotspots are present.',
       action: (
         <button type="button" onClick={retry} disabled={busy}>
           <RefreshCw size={13} className={busy ? 'spin' : ''} /> Retry

@@ -16,6 +16,7 @@ export function Legend() {
   const units = useStore((s) => s.units);
   const scoreType = useStore((s) => s.risk.data?.metadata.score_type);
   const lookback = useStore((s) => s.lookbackHours);
+  const legacyUnavailable = useStore((s) => s.risk.state === 'error' && !s.risk.data);
   const when = isLive ? 'now' : `${formatWeekday(t)} ${formatHour(t)}`;
 
   if (collapsed)
@@ -32,7 +33,7 @@ export function Legend() {
       <button type="button" className="legend__collapse" onClick={() => setState({ legendCollapsed: true })} aria-label="Collapse legend" aria-expanded>
         <ChevronDown size={15} />
       </button>
-      {layers.risk && (
+      {layers.risk && (!API_BASE || !legacyUnavailable) && (
         <div className="legend__block">
           <div className="legend__title">
             Fire risk <span>· {when}</span>

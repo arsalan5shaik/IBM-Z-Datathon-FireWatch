@@ -2,7 +2,7 @@ import { setState, useStore } from '../state/store';
 import { useEffect, useState, type CSSProperties } from 'react';
 
 const CELL = 'CA3K_X-0038_Y-0002';
-const ENDPOINT = `/api/v1/erc/cells/${CELL}`;
+
 
 type Prediction = {
   valid_date: string;
@@ -13,6 +13,7 @@ type Prediction = {
 };
 
 type Forecast = {
+  location_name?: string | null;
   snapshot_id: string;
   model_version: string;
   retrieved_at_utc: string;
@@ -30,12 +31,36 @@ type Explanation = {
   }[];
 };
 
+
+const FEATURE_LABELS: Record<string, string> = {
+  temp_max_c: 'Maximum daily temperature',
+  rh_min_pct: 'Lowest daily humidity',
+  wind_mean_ms: 'Average daily wind speed',
+  precip_mm: 'Daily rainfall',
+  elevation_mean_m: 'Elevation',
+  lat: 'Geographic location (latitude)',
+  lon: 'Geographic location (longitude)',
+  day_sin: 'Time of year (seasonal pattern)',
+  day_cos: 'Seasonal cycle',
+  precip_7d_mm: 'Rainfall over the past 7 days',
+  precip_30d_mm: 'Rainfall over the past 30 days',
+  temp_mean_7d_c: 'Average temperature over 7 days',
+  rh_mean_7d_pct: 'Average humidity over 7 days',
+  dry_days_14d: 'Dry days over the past 14 days',
+  wind_mean_7d_ms: 'Average wind speed over 7 days',
+};
+
+function featureLabel(name: string): string {
+  return FEATURE_LABELS[name] ?? name.replaceAll('_', ' ');
+}
+
 export function ERCV6Panel() {
+  const [selectedCell, setSelectedCell] = useState(CELL);
+  const ENDPOINT = `/api/v1/erc/cells/${encodeURIComponent(selectedCell)}`;
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [selected, setSelected] = useState(0);
   const [explanation, setExplanation] = useState<Explanation | null>(null);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
   const chatOpen = useStore((state) => state.chatOpen);
   const [restoreChat, setRestoreChat] = useState(false);
@@ -46,35 +71,60 @@ export function ERCV6Panel() {
   }, [chatOpen]);
 
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
+
+    setForecast(null);
+    setExplanation(null);
+    setError('');
 
     async function refresh() {
       try {
-        const response = await fetch(ENDPOINT, { cache: 'no-store' });
-        if (!response.ok) throw new Error(`Forecast API: HTTP ${response.status}`);
+        const response = await fetch(
+          `/api/v1/erc/cells/${encodeURIComponent(selectedCell)}`,
+          { cache: 'no-store', signal: controller.signal }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Forecast API: HTTP ${response.status}`);
+        }
+
         const data = (await response.json()) as Forecast;
-        if (active) {
-          setForecast((previous) =>
-            previous?.snapshot_id === data.snapshot_id ? previous : data
-          );
+
+        if (!controller.signal.aborted) {
+          console.info('[FireWatch V6] Forecast loaded', selectedCell, data.predictions.length);
+          setForecast(data);
           setError('');
-          setLoading(false);
         }
       } catch (err) {
-        if (active) {
-          setError(err instanceof Error ? err.message : 'Forecast unavailable');
-          setLoading(false);
+        if (!controller.signal.aborted) {
+          setError(
+            err instanceof Error ? err.message : 'Forecast unavailable'
+          );
         }
       }
     }
 
     void refresh();
-    const timer = window.setInterval(refresh, 60_000);
+
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void refresh();
+      }
+    }, 60_000);
+
     return () => {
-      active = false;
+      controller.abort();
       window.clearInterval(timer);
     };
-  }, []);
+  }, [selectedCell]);
+
+  const loading = !forecast && !error;
+  // Keep map dot colors aligned with the panel's selected forecast day.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('firewatch:v6-day', {
+      detail: selected + 1,
+    }));
+  }, [selected]);
 
   const day = forecast?.predictions[selected];
 
@@ -133,6 +183,31 @@ export function ERCV6Panel() {
     setExpanded(true);
   }
 
+
+  useEffect(() => {
+    const open = (event: Event) => {
+      const cellId = (event as CustomEvent<string>).detail;
+      if (!cellId) return;
+
+      // Switching cells triggers the forecast effect automatically.
+      // Clicking the already-selected cell must NOT erase its data.
+      setSelectedCell(cellId);
+      setSelected(0);
+        setState({ chatOpen: false });
+      setExpanded(true);
+    };
+
+    window.addEventListener('firewatch:open-v6', open);
+    return () => window.removeEventListener('firewatch:open-v6', open);
+  }, []);
+
+  // Keep the historical detail panel separate from live 7-day predictions.
+  useEffect(() => {
+    const hideForHistorical = () => setExpanded(false);
+    window.addEventListener('firewatch:historical-cell', hideForHistorical);
+    return () => window.removeEventListener('firewatch:historical-cell', hideForHistorical);
+  }, []);
+
   function closeV6() {
     setExpanded(false);
     if (restoreChat) {
@@ -171,7 +246,7 @@ export function ERCV6Panel() {
   }
 
   return (
-    <aside style={panelStyle} aria-label="Experimental Stockton ERC-G forecast">
+    <aside style={panelStyle} aria-label="Experimental California ERC-G forecast">
       <button
         type="button"
         onClick={closeV6}
@@ -186,17 +261,44 @@ export function ERCV6Panel() {
           padding: 0,
         }}
       >
-        FIREWATCH V6 · {expanded ? 'MINIMIZE −' : 'EXPAND +'}
+        <span style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          width: '100%',
+        }}>
+          <span>FIREWATCH V6</span>
+          <span style={{
+            fontSize: 10,
+            color: '#cbd5e1',
+            background: '#28384b',
+            padding: '5px 8px',
+            borderRadius: 6,
+          }}>
+            MINIMIZE −
+          </span>
+        </span>
       </button>
       {expanded && (<>
 
       <h3 style={{ margin: '8px 0 4px', fontSize: 19 }}>
-        Stockton, CA
+        {forecast?.location_name || (selectedCell === CELL ? 'Stockton, CA' : 'California forecast cell')}
       </h3>
+      <p style={{ color: '#94a3b8', fontSize: 11 }}>
+        {selectedCell}
+      </p>
 
       <p style={{ color: '#94a3b8', fontSize: 11, marginTop: 0 }}>
-        Experimental daily ERC-G · One grid cell · Not fire probability
+        Experimental daily ERC-G · Selected forecast cell · Not fire probability
       </p>
+      <div style={{ margin: '8px 0 4px' }}>
+        <div style={{ height: 7, borderRadius: 8,
+          background: 'linear-gradient(90deg, #fff5e6, #dfb4d4, #b971af, #7a1c8c)' }} />
+        <span style={{ fontSize: 10, color: '#94a3b8' }}>
+          Map colors: Relative ERC-G across forecasted cells, lower → higher.
+          Not calibrated danger ratings.
+        </span>
+      </div>
 
       {loading && <p>Loading live forecasts...</p>}
       {error && <p style={{ color: '#fca5a5' }}>{error}</p>}
@@ -255,12 +357,27 @@ export function ERCV6Panel() {
           )}
 
           <h4 style={{ marginBottom: 8 }}>
-            Model explanation (TreeSHAP)
+            What is influencing this prediction?
           </h4>
 
           {!explanation && (
             <p style={{ color: '#94a3b8' }}>
               Loading explanation...
+            </p>
+          )}
+
+          {explanation && (
+            <p style={{
+              color: '#94a3b8',
+              fontSize: 11,
+              lineHeight: 1.5,
+            }}>
+              Starting from a model baseline of{' '}
+              <strong style={{ color: '#f1f5f9' }}>
+                {explanation.baseline.toFixed(2)}
+              </strong>
+              , these factors have the largest effect on
+              the predicted ERC-G index.
             </p>
           )}
 
@@ -280,7 +397,21 @@ export function ERCV6Panel() {
                     margin: '9px 0',
                   }}
                 >
-                  <span>{feature.name.replaceAll('_', ' ')}</span>
+                  <span style={{ flex: 1 }}>
+                    <span style={{ display: 'block' }}>
+                      {featureLabel(feature.name)}
+                    </span>
+                    <span style={{
+                      display: 'block',
+                      color: '#94a3b8',
+                      fontSize: 10,
+                      marginTop: 3,
+                    }}>
+                      {feature.shap_value >= 0
+                        ? 'Raises predicted ERC-G'
+                        : 'Lowers predicted ERC-G'}
+                    </span>
+                  </span>
 
                   <strong style={{
                     color: feature.shap_value >= 0

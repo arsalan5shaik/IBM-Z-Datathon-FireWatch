@@ -262,12 +262,8 @@ export function Timeline() {
   const label = `${API_BASE ? '' : 'Sample · '}${isLive ? 'Now' : dayName(t, now)}`;
   const peakValue = trend?.absolute && Number.isFinite(trend.values[idx]) ? trend.values[idx] : null;
 
-  if (API_BASE && !forecast.data?.cells.length) return (
-    <div className="timeline timeline--unavailable" ref={rootRef} role="group" aria-label="Model forecast availability">
-      <strong>{riskLoading ? 'Loading model forecast…' : 'Model forecast unavailable'}</strong>
-      <p title={forecast.error ?? undefined}>Waiting for validated ML data. No sample predictions substituted.</p>
-    </div>
-  );
+  // V6 is a daily ERC-G layer. Do not display an unavailable hourly occurrence-risk timeline.
+  if (API_BASE && !forecast.data?.cells.length) return null;
   return (
     <div className="timeline" ref={rootRef} role="group" aria-label={API_BASE ? "Forecast timeline (hourly)" : "Sample forecast timeline (hourly)"}>
       <div className="timeline__head">

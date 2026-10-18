@@ -1,0 +1,4 @@
+services:
+  backend:
+    volumes:
+      - /home/linux1/IBM-Z-Datathon-FireWatch/shared/data/erc-v6:/data/erc-v6:ro,Z

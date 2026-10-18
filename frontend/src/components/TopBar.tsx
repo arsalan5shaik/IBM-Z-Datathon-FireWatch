@@ -77,9 +77,9 @@ function StatusPill() {
   } else if (fires.origin === 'api' && (fires.error || fires.data?.metadata.stale)) {
     cls += ' is-stale';
     content = <>Stale satellite cache</>;
-  } else if (origins.includes('api') && [risk, weather].some((ds) => ds.state === 'error' && !ds.data)) {
+  } else if (weather.state === 'error' && !weather.data) {
     cls += ' is-stale';
-    content = <>API · some layers unavailable</>;
+    content = <>Weather API unavailable</>;
   } else if (origins.includes('fallback') && origins.includes('api')) {
     cls += ' is-stale';
     content = (
