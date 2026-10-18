@@ -1,4 +1,5 @@
-/** Opt-in PAID browser verification. Exactly two submissions; no mocked API responses. */
+/** Opt-in PAID browser verification. Two submissions (three in acceptance mode, one of
+ * them an unpaid reference answer); no mocked API responses. */
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -92,6 +93,17 @@ try {
   assert.equal(result.requests.at(-1).location_id, 'place-ca-stockton');
   await page.screenshot({ path: path.join(output, 'real-chat-stockton.png') });
   result.steps.push({ check: acceptance ? 'Validated unavailable Stockton ML/SHAP, safe suggestions, no OpenAI generation' : 'Real OpenAI + real Stockton weather, loading and sources', status: 'PASS' });
+  if (acceptance) {
+    // Official FIRMS reference definition: no OpenAI call, clickable NASA citation.
+    const frp = await ask('What does fire radiative power mean?', null);
+    assert.match(frp.content, /megawatts \(MW\)/);
+    assert.ok(frp.sources.some(s => s.kind === 'reference' && s.url.startsWith('https://firms.modaps.eosdis.nasa.gov/')));
+    await page.locator('.msg--assistant').last().locator('a[href^="https://firms.modaps.eosdis.nasa.gov/"]').first().waitFor();
+    await page.locator('.msg--assistant').last().getByText('Sources (').click();
+    await page.locator('.msg--assistant').last().getByText('Official reference').first().waitFor();
+    await page.screenshot({ path: path.join(output, 'real-chat-reference.png') });
+    result.steps.push({ check: 'FRP official reference answer, rendered NASA links, no OpenAI generation', status: 'PASS' });
+  }
   await select('Sacramento', 'place-ca-sacramento');
   const detections = await ask('What are the latest fire detections near Sacramento?');
   assert.ok(detections.sources.some(s => s.provider === 'NASA FIRMS' && s.scope.includes('Sacramento')));
@@ -104,7 +116,7 @@ try {
   assert.ok(box.x >= 0 && box.x + box.width <= 391);
   await page.screenshot({ path: path.join(output, 'real-chat-mobile.png') });
   result.steps.push({ check: 'Mobile layout', status: 'PASS' });
-  assert.equal(result.requests.length, 2);
+  assert.equal(result.requests.length, acceptance ? 3 : 2);
   assert.deepEqual(result.errors, []);
   result.status = 'PASS';
 } catch (error) {
