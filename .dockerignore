@@ -25,6 +25,7 @@
 !deploy/worker.py
 !deploy/healthcheck.py
 !deploy/nginx.conf
+!deploy/nginx-entrypoint.sh
 !shared/
 !shared/examples/
 !shared/examples/**

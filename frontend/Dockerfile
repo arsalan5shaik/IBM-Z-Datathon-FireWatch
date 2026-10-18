@@ -20,11 +20,12 @@ RUN npm run typecheck && npm run build -- --config vite.docker.config.ts
 
 FROM ${NGINX_IMAGE} AS runtime
 COPY deploy/nginx.conf /etc/nginx/nginx.conf
+COPY --chmod=0755 deploy/nginx-entrypoint.sh /usr/local/bin/firewatch-nginx-entrypoint
 COPY --from=build /frontend/dist /usr/share/nginx/html
 USER 101:101
 EXPOSE 8080
 STOPSIGNAL SIGQUIT
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["curl", "--fail", "--silent", "http://127.0.0.1:8080/healthz"]
-ENTRYPOINT ["nginx"]
+ENTRYPOINT ["/usr/local/bin/firewatch-nginx-entrypoint"]
 CMD ["-g", "daemon off;"]

@@ -34,8 +34,9 @@ x-environment: &environment
   ALLOW_FIXTURE_DATA: 'false'
   CORS_ORIGINS: '[]'
   CHAT_ACCESS_MODE: trusted_proxy
-  CHAT_PROXY_TOKEN: ''
-  OPENAI_API_KEY: ''
+  # Both empty (the default) keeps chat blocked; set both in deploy/.env to enable it.
+  CHAT_PROXY_TOKEN: ${CHAT_PROXY_TOKEN:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
   LLM_API_KEY: ''
 
 services:
@@ -76,6 +77,9 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     stop_grace_period: 30s
+    environment:
+      # nginx injects this as X-FireWatch-Chat-Auth; it never reaches the browser.
+      CHAT_PROXY_TOKEN: ${CHAT_PROXY_TOKEN:-}
     ports:
       - '${FIREWATCH_BIND_ADDRESS:-127.0.0.1}:${FIREWATCH_PORT:-8080}:8080'
     depends_on:

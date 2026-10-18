@@ -9,7 +9,7 @@ import os
 import subprocess
 import sys
 import tempfile
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -20,10 +20,21 @@ EXPECTED_SHA = "cb124badd47c898448c30500fe13f4827481e1986bd2a776605a0b99308b2e33
 CELL_ID = "CA3K_X-0038_Y-0002"
 
 REQUIRED_FEATURES = (
-    "temp_max_c", "rh_min_pct", "wind_mean_ms", "precip_mm",
-    "elevation_mean_m", "lat", "lon", "day_sin", "day_cos",
-    "precip_7d_mm", "precip_30d_mm", "temp_mean_7d_c",
-    "rh_mean_7d_pct", "dry_days_14d", "wind_mean_7d_ms",
+    "temp_max_c",
+    "rh_min_pct",
+    "wind_mean_ms",
+    "precip_mm",
+    "elevation_mean_m",
+    "lat",
+    "lon",
+    "day_sin",
+    "day_cos",
+    "precip_7d_mm",
+    "precip_30d_mm",
+    "temp_mean_7d_c",
+    "rh_mean_7d_pct",
+    "dry_days_14d",
+    "wind_mean_7d_ms",
 )
 
 
@@ -44,7 +55,7 @@ def validate(data):
     if retrieved.tzinfo is None:
         raise ValueError("Retrieval timestamp has no timezone")
 
-    age = abs((datetime.now(timezone.utc) - retrieved).total_seconds())
+    age = abs((datetime.now(UTC) - retrieved).total_seconds())
     if age > 1800:
         raise ValueError("Weather retrieval timestamp is stale")
 
@@ -52,7 +63,7 @@ def validate(data):
     if not isinstance(rows, list) or len(rows) != 7:
         raise ValueError("Expected exactly seven predictions")
 
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     dates = set()
 
     for row in rows:
@@ -122,13 +133,20 @@ def main():
             cmd = [
                 sys.executable,
                 str(args.probe_script),
-                "--model", str(MODEL),
-                "--features-json", str(FEATURES_JSON),
-                "--cell-id", CELL_ID,
-                "--latitude", "37.969042",
-                "--longitude", "-121.282320",
-                "--elevation-m", "4.76",
-                "--output", str(result_path),
+                "--model",
+                str(MODEL),
+                "--features-json",
+                str(FEATURES_JSON),
+                "--cell-id",
+                CELL_ID,
+                "--latitude",
+                "37.969042",
+                "--longitude",
+                "-121.282320",
+                "--elevation-m",
+                "4.76",
+                "--output",
+                str(result_path),
             ]
 
             subprocess.run(cmd, check=True, timeout=240)
@@ -154,9 +172,7 @@ def main():
                     os.fsync(file.fileno())
 
             # Replace the current pointer atomically on the same filesystem.
-            fd, pending = tempfile.mkstemp(
-                prefix=".pending-", suffix=".json", dir=OUTPUT_DIR
-            )
+            fd, pending = tempfile.mkstemp(prefix=".pending-", suffix=".json", dir=OUTPUT_DIR)
             try:
                 with os.fdopen(fd, "wb") as file:
                     file.write(content)
