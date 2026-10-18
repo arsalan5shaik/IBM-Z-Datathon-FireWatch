@@ -16,7 +16,9 @@ with additional transport instructions. No model is silently substituted.
 |---|---|---|
 | OPENAI_API_KEY | unset | Backend-only key; missing => explicit 503 |
 | OPENAI_MODEL | gpt-5-mini | Configurable Responses model |
-| OPENAI_TIMEOUT_SECONDS | 25 | Timeout per SDK attempt |
+| OPENAI_TIMEOUT_SECONDS | 25 | Timeout per synthesis attempt |
+| OPENAI_RESEARCH_TIMEOUT_SECONDS | 45 | Timeout per hosted-research attempt; never retried after a timeout |
+| OPENAI_MAX_RETRIES | 1 | Retries for transient 408/409/429/5xx/connection failures only |
 | OPENAI_MAX_OUTPUT_TOKENS | 2500 | Per-response visible + reasoning token cap |
 | CHAT_MAX_HISTORY_MESSAGES | 10 | Untrusted conversation context, never evidence |
 | CHAT_MAX_MESSAGE_LENGTH | 2000 | Current message character limit |
@@ -29,9 +31,16 @@ with additional transport instructions. No model is silently substituted.
 | CHAT_ACCESS_MODE | local | local or trusted_proxy |
 | CHAT_PROXY_TOKEN | unset | 32+ character server/edge secret in proxy mode |
 
-The SDK uses one retry and low reasoning effort. Research additionally caps
-built-in tool calls at one per Responses request. Retry attempts may incur cost;
-request quotas are not dollar budgets. Failed requests still consume a quota.
+Calls use low reasoning effort. SDK retries are disabled; `ResponsesClient`
+owns one bounded retry so every attempt is timed and classified. It retries only
+transient failures (408/409/429/5xx, connection) when the delay is at most 2 s and
+at least 5 s of the request deadline remain. It never retries authentication,
+invalid-request, `insufficient_quota` or a timed-out hosted research attempt:
+repeating research after a 25 s timeout is what produced the measured 50 s research
+stage. Every attempt shares the whole-request deadline (90 s minus a 2 s margin).
+Research additionally caps built-in tool calls at one per Responses request. Retry
+attempts may incur cost; request quotas are not dollar budgets. Failed requests
+still consume a quota.
 
 Local startup:
 
@@ -71,8 +80,10 @@ context rejected. Internal reasoning and credentials are never returned.
 
 The typed response contains `answer`, `sources`, `tools_used`, `location`,
 `requested_time`, `data_freshness`, `limitations`, `suggested_questions`, `model`,
-`mode`, and compatible `grounding`. Sources distinguish FireWatch from external
-research and preserve real URLs, titles, provider, retrieval time, available
+`mode` (`openai`, `scope_refusal`, `clarification`, `data_unavailable`,
+`reference`), and compatible `grounding`. Sources (`kind` `firewatch`, `research`
+or `reference`) distinguish FireWatch data, live external research and reviewed
+official definitions, and preserve real URLs, titles, provider, retrieval time, available
 valid/observation/generation/fetch times, freshness, scope and weather sample.
 Publication times are explicitly unknown if the search provider does not supply
 them. They are never inferred from a page title or model memory.
@@ -114,9 +125,31 @@ AirNow/EPA, PubMed and selected official county emergency sites). This list is
 deliberately bounded; other counties/journals may require a reviewed addition.
 
 A research citation is accepted only if the response contains a completed actual
-web-search call, its URL occurs in returned source records and in a URL citation
-annotation, and it passes HTTPS/domain/credential/port/IP validation. No sources
-are generated from model text alone. Source IDs are registered by the server and
+web-search call, its URL was retrieved by a **completed** native action (a
+`search` action's returned sources, or the page URL of an `open_page` /
+`find_in_page` action) and appears in a URL citation annotation, and it passes
+HTTPS/domain/credential/port/IP validation. Failed or unfinished actions never
+substantiate a citation; partial retrieval is disclosed as a limitation. URL
+matching ignores only host case, fragments, a trailing slash and tracking
+parameters such as `utm_source=openai`; displayed links drop those tracking
+parameters. No sources are generated from model text alone.
+
+When a question needs research and no FireWatch data, the hosted research answer
+(with its natively validated citations) is returned directly after the normal
+output validator; if that validation fails, normal synthesis runs instead. This
+removes a second paid model call that only paraphrased the research. If required
+research is unavailable, the server's unavailability notice is returned without
+a model call (`mode=data_unavailable`, `model=null`). General-science questions
+("how does wind affect spread?") do not fetch the selected location's forecast.
+
+FIRMS field definitions (FRP, VIIRS low/nominal/high confidence, hotspot versus
+confirmed incident) are answered from `app/services/chat_reference.py`:
+version-controlled text quoting the NASA FIRMS FAQ and VIIRS attribute page,
+reviewed 2026-10-18 UTC. Standalone definition questions return
+`mode=reference`, `model=null`, `kind=reference` sources with those official URLs,
+and no OpenAI or search call. Questions that also ask for data, a place, a time
+or current events keep the normal path, with the definitions added as citable
+`ref-*` evidence. Re-review the text if NASA changes those pages. Source IDs are registered by the server and
 validated in the final answer. Known unverified numeric claims and claims about
 missing model/fire data are rejected; these checks and the prompt are defenses,
 not a proof that every natural-language synthesis is correct. Source conflicts
@@ -138,7 +171,9 @@ Official documentation checked during implementation:
 
 Responses/function calling/structured-output support is documented. Hosted search
 uses the supported Responses controls with low reasoning, not minimal reasoning.
-Account-specific gpt-5-mini/search access remains unverified without a key. If
+Local gpt-5-mini/search access was verified on 2026-10-18 with real credentials;
+the complete live acceptance gate remains open. See the
+[live verification report](../docs/LIVE_API_VERIFICATION.md). If
 the configured model/tool is rejected, the API returns
 `chat_model_or_tool_unsupported`; it does not switch models or fake research.
 
@@ -185,11 +220,12 @@ available, so the public AI remains BLOCKED/offline demo until that hosting exis
 |---|---|
 | California locations | Available: authoritative catalog, boundaries, real IDs |
 | Weather/wind | Available: real Open-Meteo cache used directly by tools |
-| NASA FIRMS | Cache consumer available; local real cache/key unavailable |
+| NASA FIRMS | Real two-product ingestion and cached chat reads verified locally |
 | ML risk | Validated live-artifact consumer; real artifacts unavailable |
 | SHAP | Unavailable; no authoritative service/contract connected |
-| OpenAI Responses | Implemented and deterministically tested; live key BLOCKED |
-| Hosted external research | Implemented with verified-citation transport; live key BLOCKED |
+| OpenAI Responses | Live gpt-5-mini acceptance PASS (run 3, 2026-10-18); see the report |
+| Hosted external research | Live PASS: 7/7 retrievals cited official sources in 8.4-18.3 s; mixed-action path mock-verified only |
+| FIRMS definitions | Reviewed NASA reference text; no model call (`mode=reference`) |
 | Public hosted chatbot | BLOCKED: HTTPS backend + authenticated gateway absent |
 
 Unit tests mock OpenAI and never incur paid calls. Real browser tests use the
@@ -205,6 +241,17 @@ It prints BLOCKED with no key. With a configured key, it performs bounded Stockt
 weather and Camp Fire research requests plus a no-cost scope refusal. It verifies
 actual Responses results and citation metadata. It is never run in CI.
 
+Paid verification needs a separately approved cap per run. The opt-in
+`scripts/live_verification_server.py` refuses to start without explicit
+`FIREWATCH_VERIFY_MAX_CHAT`, `_MAX_ATTEMPTS` and `_MAX_SEARCHES` values and keeps
+private never-reset counters per `FIREWATCH_VERIFY_SESSION`;
+`scripts/chat_acceptance_live.py` and `frontend/scripts/verify-live-apis.mjs`
+drive it with real providers, not mock responses.
+Native search may return multiple completed search/open/find actions despite the
+requested `max_tool_calls=1`. The validator accepts completed actions and still
+requires citations to match retrieved URLs and native annotations. Research-call
+settings cap retrieval requests, not a guaranteed exact native action count.
+
 ## LinuxONE / s390x
 
 No containers, model runtime or new geospatial dependency are introduced. The
@@ -216,3 +263,24 @@ wheel availability only, not ABI behavior or the entire dependency tree.
 Run `uv sync --locked`, imports, the full backend suite and a bounded real-key
 smoke on the actual LinuxONE host; verify glibc, TLS/egress, writable shared cache,
 SQLite locking and gateway access there. Runtime compatibility remains UNVERIFIED.
+
+## PR #12 acceptance follow-up
+
+See `docs/LIVE_API_VERIFICATION.md` for the additional live run and exact limits.
+Missing-model-only questions now return validated availability results directly:
+`mode=data_unavailable`, `model=null`, registered sources, no OpenAI generation.
+This is an additive response mode; the frontend uses its normal API response path.
+It is not an inference result or an offline fixture. Tool/citation/numeric/secret
+validation remains enabled. Follow-up buttons are server-owned supported actions.
+Completed preflight tools are not offered repeatedly.
+
+Run 3 (2026-10-18 UTC) fixed the measured 57 s research latency (research had the
+25 s synthesis timeout and was repeated after it), page-action citation rejection,
+redundant synthesis calls, a secret-pattern false positive on cited URLs, and false
+rejection of correct Pacific local times. Pacific clock times in data answers must
+equal the America/Los_Angeles rendering of a cited timestamp. Logs record
+`chat_model_attempt stage/attempt/outcome/duration_ms` and one
+`chat_request_summary` per request: timings and outcome classes only. Live
+acceptance: 11 of 13 questions PASS, one PASS after a fix, one PARTIAL, for about
+$0.10; see the report for answers, sources and limits. Never reset a
+ledger's counters to get more paid tests.

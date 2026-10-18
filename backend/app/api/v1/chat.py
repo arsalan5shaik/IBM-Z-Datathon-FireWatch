@@ -5,7 +5,9 @@ from starlette.concurrency import run_in_threadpool
 
 from app.errors import APIError
 from app.schemas.chat import ChatRequest, ChatResponse
+from app.services import chat_reference
 from app.services.chat_access import authorize
+from app.services.chat_tools import mentioned_locations
 
 router = APIRouter(prefix="/api/v1", tags=["FireWatch AI"])
 
@@ -28,13 +30,16 @@ async def chat(body: ChatRequest, request: Request):
         # Deterministic out-of-scope refusals do not need a paid model call.
         from app.services.chat_service import scoped
 
-        if scoped(body.message, body.history):
+        if not scoped(body.message, body.history):
+            return await service.answer(body)
+        if not chat_reference.definition_only(
+            body.message, mentioned_locations(request.app.state.locations, body.message)
+        ):
             raise APIError(
                 "chat_not_configured",
                 "Set OPENAI_API_KEY on the FastAPI server; live AI is unavailable",
                 503,
             )
-        return await service.answer(body)
     lease = await run_in_threadpool(request.app.state.chat_limits.acquire, request.client.host)
 
     async def disconnected():

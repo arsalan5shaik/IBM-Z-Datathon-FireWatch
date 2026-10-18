@@ -1,0 +1,601 @@
+# FireWatch live API verification and deployment readiness
+
+Verified 2026-10-18 UTC, locally on Windows/Python 3.11.17 and Chrome.
+Base: main `a409571`; branch: `JS_feat/live-api-verification`.
+No Dockerfiles, deployment infrastructure, ML artifacts or teammate branches were changed.
+
+## Chatbot reliability run 3 - 2026-10-18 02:30-03:30 UTC (current)
+
+Run on Windows / Python 3.11 in an isolated worktree of PR #12 (head `8725ab3`
+at start), with real gpt-5-mini Responses, OpenAI hosted search, NASA FIRMS and
+Open-Meteo. No Docker, ML training, SHAP or FIRMS ingestion code was changed. The
+two sections below this one are retained history; their open items are resolved
+or restated here.
+
+| Readiness | Result |
+|---|---|
+| Code merge (PR #12) | PASS: automated suites, CI and the live chatbot acceptance gates below |
+| Local live demo | PASS for the tested paths, with the limitations listed below |
+| Public deployment | NOT READY / out of scope: no authenticated HTTPS gateway; LinuxONE unverified |
+
+### Root causes and fixes
+
+| Problem (handoff item) | Root cause | Fix and regression evidence |
+|---|---|---|
+| 57 s research answer with an unexplained retry (B) | Hosted research shared the 25 s synthesis attempt timeout. Research takes about 20-25 s, so attempt 1 timed out and the SDK repeated the whole research: 25 s + backoff + 24.6 s = the measured 50.1 s, paying for search twice | `OPENAI_RESEARCH_TIMEOUT_SECONDS=45`; `ResponsesClient` owns one bounded retry (SDK retries off): transient 408/409/429/5xx/connection only, never after a research timeout, never auth/invalid/`insufficient_quota`, never a >2 s retry-after; all attempts share the request deadline. Secret-free `chat_model_attempt` / `chat_request_summary` logs. Tests: research timeout = 1 attempt; transient research 503 = 2; quota/long backoff/400 = 1; deadline caps attempts |
+| Valid research rejected (A) | Citable URLs came only from `search` sources; a completed `open_page`/`find_in_page` retrieval of the cited page rejected the whole result. Exact string matching also broke on tracking parameters | Completed page-action URLs are retrieval evidence; failed/unfinished actions never are; matching ignores only host case, fragment, trailing slash and `utm_*`. Nine accept/reject combinations (multi-search, open/find, failed+completed, in-progress, out of order, duplicates, failed-only, failed open_page, model-written URL, lookalike host, no annotation) |
+| Redundant paid calls (B) | Research-only answers paid for a synthesis that only paraphrased the cited research; failed required research paid for a synthesis whose output finalize() always replaced | Research-only questions return the validated research answer (one call; falls back to synthesis if validation fails); unavailable required research returns the server notice with no model call; general wind science no longer fetches a local forecast |
+| FRP 502 and "low/nominal" wording (C) | Definitions of FireWatch's own FIRMS fields depended on variable research and model memory | `app/services/chat_reference.py`: version-controlled NASA FIRMS FAQ / VIIRS attribute text (pages reviewed 2026-10-18 UTC). Standalone definition questions return `mode=reference`, `model=null`, no OpenAI/search call; data questions get the definitions as citable `ref-*` evidence |
+| Live: valid research rejected as a "secret" | Key pattern `sk-[A-Za-z0-9_-]{12,}` had no boundary: a cited CAL FIRE Board PDF path `...risk-assessment-pdf` matched | Key-shaped tokens only (`(?<![A-Za-z0-9])sk-` + 20 chars); configured-key exact match unchanged. Regression for the URL and for real key shapes |
+| Live: correct weather answer returned 502 | Numeric grounding saw only the UTC forecast hour; "15:00 PDT" for 22:00Z had no digits in evidence (an earlier "02:26 PDT" passed by coincidence) | Pacific clock times must equal the America/Los_Angeles rendering of a cited timestamp (exact, PDT/PST, 12/24 h); wrong local times now fail even if the digits occur elsewhere |
+| Live: research answers stated "published Jul 21, 2026", credited uncited sources and ended with "If you want, I can..." | Research instructions; provider metadata publication times are unverified | Instructions forbid stating publication/update/crawl dates and uncited attribution; trailing offer paragraphs are dropped from direct research answers (server owns follow-ups) |
+| Live: coordinates written "-121.47929 W" | Model formatting | Transport rule: signed values or hemisphere letters, never both. Browser rerun: "-121.47929, 38.60741" |
+
+Preserved: fail-closed citation/URL/domain validation, timestamp-field checks,
+verified Fahrenheit conversion, invented-score/SHAP/detection rejection, current
+evacuation-order guard, unsupported-capability rejection (offers of imagery are
+still rejected; descriptive science use of "imagery" is allowed; any "radius"
+claim is still rejected), deterministic missing-ML/SHAP answers, quotas, access
+mode and the unchanged FireWatch system prompt (SHA-256 test).
+
+### Live acceptance results
+
+Selected hour = current UTC hour. "Model" = OpenAI HTTP attempts for that answer.
+Content was read in full and checked against the cached FIRMS data, a direct
+`/weather` read and the cited official pages; a 200 alone was not counted.
+
+| # | Question | Result | Time (s) | Model | Evidence |
+|---|---|---|---:|---:|---|
+| 1 | What does fire radiative power mean? | PASS | 0.691 | 0 | `reference`: rate of radiative energy per pixel, MW, proxy of intensity; not acreage, perimeter, containment or probability. NASA VIIRS attributes + FIRMS FAQ |
+| 2 | How does wind affect wildfire spread? | PASS | 12.722 | 1 | Direct research: spread rate, flame tilt/preheating, spotting, terrain, gusts; no current weather invented. NWS Wildfire Hazards; USFS RMRS Fire Behavior; USFS Treesearch; PNW 2024; USFS article. First run 18.574 s via synthesis fallback (secret false positive, fixed) |
+| 3 | Satellite hotspot vs confirmed wildfire? | PASS | 0.049 | 0 | `reference`: 375 m pixel centre, other heat sources, no perimeter/acreage/containment, absence is not proof. FIRMS FAQ |
+| 4 | What does nominal confidence mean for this VIIRS detection? | PASS | 0.050 | 0 | `reference`: n = nominal, strong (>15 K) anomaly, not low, not a probability |
+| 5 | Where can I find official California wildfire incident updates? | PASS | 11.950 | 1 | CAL FIRE Incidents; Cal OES State Emergency Plan; local OES/NWS pointers. One completed search action |
+| 6 | How should I prepare for wildfire evacuation? (Stockton) | PASS | 10.813 | 1 | Plan, go-bag, vehicle, defensible space, San Joaquin alerts, leave when ordered; no active order claimed. Ready.gov; Ready.gov guide; San Joaquin ESF-15. First run 18.386 s stated source dates/uncited sources (instructions fixed) |
+| 7 | What should I do if I receive an evacuation order? | PASS | 10.643 | 1 | Leave immediately, follow official routes, 911; no local order invented. CAL FIRE Map Legend, Cal OES guides, Ready.gov, CalHHS (one CDPH floods page is weakly relevant) |
+| 8 | Latest detections near Sacramento? | PASS | 6.589 | 1 | One NOAA-20 detection: acquired 2026-10-17T09:26:00Z (02:26 PDT), FRP 20.75 MW, nominal, not a confirmed incident; matches cache. Fetch time not used as observation time |
+| 9 | Stockton's risk over the next seven days? | PASS | 0.051 | 0 | `data_unavailable`: no score/category/probability |
+| 10 | Why is wildfire risk elevated in Stockton? | PASS | 0.056 | 0 | `data_unavailable`: no risk or SHAP attribution invented |
+| 11 | Confidence values of latest detections near Sacramento? | PARTIAL | 6.928 | 1 | Correct l/n/h definitions citing `ref-*` sources; did not restate that the single detection is nominal |
+| 12 | Evacuation orders in Stockton right now? | PASS | 8.432 | 1 | Current-order guard; local sources only: SJ OES Current Conditions, SJReady Know Your Zone, Cal OES evacuation layer |
+| 13 | Weather in Stockton tomorrow afternoon? | PASS after fix | 5.046 | 1 | 2026-10-18 15:00 PDT: 30.9 C (87.6 F), RH 22%, 0.0 mm, wind 11.5 km/h from 294 deg, gusts 13.3 km/h; equals direct `/weather` read. First run 502 (local-time false rejection, fixed) |
+
+Also observed: the production limiter returned 429 `chat_rate_limit` for a
+seventh request within one minute (no OpenAI call), as configured.
+
+The provider emitted exactly one completed `search` action in each of the seven
+research calls, so the **mixed completed/failed action path was not reproduced
+live**. It is covered by the mocked combinations above, which exercise the same
+validator that accepted all seven live retrievals.
+
+**Real Chrome** (`verify-live-apis.mjs`, acceptance mode): PASS, six checks,
+zero page errors: 459 real FIRMS records / 191 rendered, hotspot panel
+acquisition/confidence/FRP, Stockton missing-model answer (no OpenAI), FRP
+reference answer with clickable NASA links labeled "Official reference",
+Sacramento detection answer with current location/hour, 390 px mobile layout.
+Expected network limitations remained visible: `/fires/incidents` 404 and
+missing-artifact `/forecasts/risk` 503. In that browser run `/weather` and
+`/wind` also returned 503 for about one minute after a cold-cache statewide
+refresh failed (existing one-minute retry backoff in `WeatherCache`); immediately
+afterwards a point read took 1.1 s and the statewide wind grid 11.1 s. Warm the
+weather cache before a demo.
+
+### Latency by stage
+
+| Path | Calls | Measured |
+|---|---|---|
+| Reference / missing-model answers | 0 | 0.049-0.056 s warm; 0.691 s first request after start |
+| FireWatch data + synthesis | 1 | synthesis 4.2-6.9 s; total 5.0-6.9 s |
+| Research-only (direct) | 1 | research 8.4-18.3 s, median 11.1 s; total 8.4-18.4 s (was 57.2 s with 50.1 s research) |
+| Research + synthesis fallback | 2 | 13.3 s + 5.2 s = 18.6 s (before the secret-pattern fix) |
+
+Zero retries, timeouts or provider errors occurred in 13 attempts.
+
+### Usage and estimated cost (approved cap: 25 chats, 40 attempts, 15 searches)
+
+- 20 chat HTTP requests (6 answered without a model, 1 rate-limited), 13 OpenAI
+  HTTP attempts = 13 SDK operations, 7 research calls, **7 search actions**.
+- SDK-reported usage: **94,312 input tokens (36,352 cached), 8,450 output
+  (3,904 reasoning)**. At gpt-5-mini $0.25/M input, $0.025/M cached input and
+  $2/M output: about **$0.032**; seven searches at $0.01: **$0.07**; observable
+  estimate **about $0.10**, not an invoice. Billing was not queried.
+- One NASA FIRMS refresh (no `--force`, no loop): NOAA-20 292 / NOAA-21 347
+  California observations, latest acquisition 2026-10-17T21:31:00Z, fetched
+  2026-10-18T03:01:40Z; no new overpass since run 2.
+- Private evidence outside Git: `%TEMP%/firewatch-chat-acceptance-3/`
+  (`budget.json`, `answers.json`, `browser.json`, `server.log`, screenshots).
+  Earlier ledgers were not modified or reset.
+
+### Commands (this run)
+
+```powershell
+# backend: one FIRMS refresh, then the capped server (caps are mandatory)
+uv run --no-sync python -m app.jobs.refresh_fires
+$env:FIREWATCH_RUN_PAID_VERIFICATION='1'; $env:FIREWATCH_VERIFY_SESSION='firewatch-chat-acceptance-3'
+$env:FIREWATCH_VERIFY_MAX_CHAT='25'; $env:FIREWATCH_VERIFY_MAX_ATTEMPTS='40'; $env:FIREWATCH_VERIFY_MAX_SEARCHES='15'
+$env:CORS_ORIGINS='["http://127.0.0.1:5178"]'
+uv run --no-sync python scripts/live_verification_server.py
+# second backend shell, same two FIREWATCH_ variables: questions by number
+uv run --no-sync python scripts/chat_acceptance_live.py 1 3 4 9 10
+# frontend
+npm run dev -- --host 127.0.0.1 --port 5178 --strictPort
+$env:FIREWATCH_VERIFY_CHAT_ACCEPTANCE='1'; node scripts/verify-live-apis.mjs
+```
+
+### Remaining limitations
+
+- Mixed-action research: PASS on mocks, not reproduced live (provider behavior).
+- Real ML risk artifacts and SHAP remain unavailable (separate ML dependency);
+  answers report unavailability and never invent scores or attributions.
+- Numeric grounding is a conservative text heuristic. Research answers are
+  validated for citations/URLs/domains, not numerically; their content was
+  reviewed by hand for this run only.
+- Research answers may still offer, inline, to look up a county's pages (a
+  supported research action). Data-unavailable answers show raw `[fw-N]` markers.
+- Weather cold-cache refresh failures make weather unavailable for one minute
+  (existing backoff); warm the cache before a demo.
+- Public hosting (authenticated gateway, HTTPS, CORS), LinuxONE runtime and
+  Docker are out of scope and unverified.
+
+## Chatbot acceptance follow-up - 2026-10-18 UTC (superseded by run 3)
+
+**Live-demo acceptance at that time: BLOCKED; superseded by run 3 above.**
+The missing-prediction timeout path is fixed and verified. General research is
+still too variable for an unqualified demo-readiness claim, and the conservative
+search allowance was consumed before all requested science questions could run.
+LinuxONE verification and Docker remain separate; neither is approved by this run.
+The original run below is retained as history, not the current test total.
+
+### Acceptance results
+
+| Requirement | Result | Evidence and remaining work |
+|---|---|---|
+| Elevated-risk explanation timeout | PASS for unavailable artifacts | Risk and SHAP reads each 0-3 ms. Final HTTP tests returned 200 with `mode=data_unavailable`, `model=null`, registered availability sources and no OpenAI request. Warm seven-day/SHAP requests: 0.089/0.094 s; first request after restart: 1.345 s. |
+| Repeated/unnecessary calls | PASS for tested paths | Missing-model questions stop after their validated reads. Completed preflight tools are no longer offered again. No inference, weather or research fills missing model output. |
+| Retry/deadline bounds | PASS automated | Real SDK over mocked HTTP: 503/429/timeout get at most two attempts, 401 gets one; transient 503 recovers on the only retry. Wall-clock timeout cancels model work. Existing disconnect, lease, tool-loop and quota guards remain tested. |
+| Unsupported follow-up suggestions | PASS | Server-owned weather, wind and cached bbox-detection questions only. Tests reject promises of FIRMS refresh, radius queries, imagery and SHAP execution in answer text. Chrome rendered the supported suggestions. Initial UI questions no longer assume elevated risk. |
+| Multi-action hosted research | FAIL live before final correction; final correction BLOCKED for live revalidation | Official incident-updates request produced two search actions in 21.879 s, then availability fallback. A non-completed native action caused validation rejection; individual statuses were not captured on that first request. The final validator uses only completed retrievals, discloses partial results, and still requires native citations to match URLs from completed actions. Mixed successful/failed action and failed-source-only citation rejection tests pass. A later single-action live research request succeeds; it does not prove the mixed-action path. |
+| Wildfire evacuation preparedness vs current orders | PASS for distinction; PARTIAL for direct CAL FIRE provenance | Combined preparedness/conditional-order/official-updates question returned 200 with seven native, official county citations and useful guidance. It did not assert an order was in effect. Retrieved sources were SJReady/San Joaquin County, not a direct CAL FIRE page; do not claim direct CAL FIRE citation verification. |
+| Official citations | PASS for local sources | Hosted retrieval supplied source URLs and native annotations; server validation passed. Independent read-only checks confirmed SJReady Know Your Zone and county OES Current Conditions exist and are relevant. Publication times stay unknown. No live-current evacuation order was verified. |
+| Research latency | FAIL readiness target / unresolved | Preparedness research used an SDK retry: 50.126 s for research plus 6.476 s final synthesis; HTTP total 57.238 s. It succeeded within the bounded deadline, but this remains unsuitable for a predictable short demo. |
+| FRP explanation | BLOCKED live | Real Sacramento output preserved the actual 20.75 MW value; the requested general FRP-definition question could not be live-retested within the conservative search allowance. Routing-to-research tests pass, which is not a live factual verification. |
+| Wind-spread science | BLOCKED live | Research routing is tested; no new paid science answer was executed after the search stop. |
+| Satellite hotspot vs confirmed incident | PASS in real detection answer; general comparison BLOCKED | Chrome's actual Sacramento answer explicitly identified a thermal hotspot, not a confirmed incident, and disclosed stale cache. A standalone general-science comparison remains unexecuted. |
+| VIIRS confidence wording | FAIL observed; corrected transport PASS automated, final wording BLOCKED live | The real model called code `n` "low/nominal." Compact evidence now includes `confidence_label=nominal` and explicit l/n/h instructions; the real-code transport test checks nominal. No paid retest of the wording was performed. |
+| Unavailable real ML predictions / SHAP | PASS handling; actual inference BLOCKED | Elevated-risk, seven-day and SHAP HTTP tests return explicit unavailability with real location/time and no scores/attributions. No fixtures, model execution or generated SHAP substitute was used. |
+| Full backend regression | PASS | 385 tests, no failures/skips; see commands below. |
+| Frontend regression | PASS | 63 tests / 10 files, TypeScript and production build pass. |
+| Browser integration | PASS scoped / limitations retained | Real Chrome: backend-cache FIRMS points/panel, Stockton missing-model answer, supported suggestions, Sacramento detection chat, mobile drawer. No API interception or model fixtures; one real gpt-5-mini response, one deterministic availability response. No page JavaScript errors. Existing `/fires/incidents` 404 and missing-artifact risk 503 remain visible network limitations, not successful APIs. |
+
+### Latency investigation and corrections
+
+The timed baseline used one gpt-5-mini response (11.250 s; HTTP 11.669 s),
+while get_risk/get_shap took 0.001/0.000 s. Its long answer invented assumptions
+about the model's features and offered unavailable actions. Prompt-only changes
+still produced unwanted generic science and one conditional retrieval offer;
+Chrome correctly received a validation error on that draft. The earlier session's
+25-second provider timeout cannot retrospectively be attributed to a particular
+network/server fault; no per-attempt trace existed. These measurements identify
+model latency and unnecessary generation as the removable dependency.
+
+The final missing-model path answers directly from the real validated availability
+results and runs the normal output validator. Its API mode is additive
+`data_unavailable`; `model` is null because no model generated the response.
+Existing fake prediction/SHAP/detection rejection assertions remain at the output
+validator; a separate orchestration test proves no model/provider calls are made.
+No existing safety assertion was removed. Source metadata is now valid numeric
+evidence, and inline numbered-list markers are recognized as formatting; wrong
+retrieval/observation timestamps and invented numeric facts remain rejected.
+The exact version-controlled FireWatch system prompt remains unchanged.
+
+Normal model responses allow one SDK retry, at most, within a wall-clock cap of
+`min(2 * OPENAI_TIMEOUT_SECONDS + 1, CHAT_TIMEOUT_SECONDS)` (51 s with current
+settings). The entire chat still has its separate 90 s deadline. No application
+retry loop was added. The first research attempt's failure status was not captured:
+the delay is consistent with a per-attempt timeout, but its cause is UNKNOWN. Safe logs contain only tool names, stage and elapsed time;
+no prompt, conversation, provider URL, key or tool arguments are logged.
+
+### Measured usage and estimated cost - additional allowance only
+
+- Authorized maximum: 20 additional paid OpenAI attempts, four hosted searches.
+- Actual: 13 chat HTTP submissions; 11 SDK operations; **12 OpenAI HTTP attempts**
+  including one SDK retry. Deterministic missing-artifact responses incur no call.
+- Two research operations returned three native search actions. One unmetered
+  research attempt before the SDK retry has unknown tool/token usage. Conservatively
+  reserve the fourth search for that attempt: **further research was stopped**.
+  The final ledger sets `research_allowance_closed=true`; counters were not reset.
+  The unknown attempt may have executed zero or multiple native actions; the
+  exact billable-action total cannot be certified from returned usage alone.
+- SDK-reported totals: **47,881 input tokens**, including **16,640 cached input**,
+  and **7,161 output tokens**. These exclude any usage the retried attempt did not return.
+- At [gpt-5-mini pricing](https://developers.openai.com/api/docs/models/gpt-5-mini),
+  the reported token component estimates **$0.02255**. Three observed search actions
+  at [search pricing](https://developers.openai.com/api/docs/pricing) add an estimated
+  **$0.03**: **$0.05255 observable-component estimate**, not an invoice. Reserving
+  another $0.01 for the unknown attempt gives $0.06255 plus any unreported tokens
+  or separately billed search-content usage. Actual project billing was not queried.
+- Private local evidence, never committed: `%TEMP%/firewatch-chat-acceptance-2/`
+  `budget.json`, `answers.json`, `browser.json`, desktop/mobile screenshots and the
+  earlier `real-browser-failure.png`. The initial run's ledger remains untouched.
+
+### Reproducible checks and safe replay
+
+Actual commands, from the isolated worktree's backend/frontend respectively:
+
+```powershell
+# backend (existing Python 3.11 virtual environment)
+./.venv/Scripts/python.exe -m pytest -q
+./.venv/Scripts/python.exe -m ruff check .
+./.venv/Scripts/python.exe -m ruff format --check .
+./.venv/Scripts/python.exe scripts/smoke.py
+./.venv/Scripts/python.exe scripts/smoke.py --fixtures
+# frontend
+npm.cmd test
+npm.cmd run typecheck
+npm.cmd run build
+```
+
+Targeted development command: `./.venv/Scripts/python.exe -m pytest -q tests/unit/test_chat.py`.
+Frontend targeted command: `npm.cmd test -- src/state/chat.test.ts`.
+An initial new frontend assertion failed because Zustand SSR uses its initial
+snapshot; the test now uses the repository's existing explicit-snapshot pattern.
+The failed CI run is superseded only when checks on the final commit pass.
+
+Real local servers used `scripts/live_verification_server.py` on 127.0.0.1:8007
+and `npm.cmd run dev -- --host 127.0.0.1 --port 5178 --strictPort`. The verification
+server requires `FIREWATCH_RUN_PAID_VERIFICATION=1`,
+`FIREWATCH_VERIFY_SESSION=firewatch-chat-acceptance-2` and loopback CORS.
+The real-browser command was:
+
+```powershell
+$env:FIREWATCH_RUN_PAID_VERIFICATION='1'
+$env:FIREWATCH_VERIFY_SESSION='firewatch-chat-acceptance-2'
+$env:FIREWATCH_VERIFY_CHAT_ACCEPTANCE='1'
+node scripts/verify-live-apis.mjs
+```
+
+**Do not replay paid research under the consumed allowance.** Additional live
+FRP/wind/comparison and multi-action checks require a separately authorized search
+allowance. Do not reset/delete the saved counters. The same browser script's
+original mode still tests real weather; acceptance mode explicitly expects an
+unpaid, validated missing-model response and a real OpenAI detection response.
+The fixtures smoke command is isolated and is not evidence of live inference.
+Warnings: existing Starlette/HTTPX deprecation and Vite future config-loader warning.
+Neither was suppressed and no dependencies were changed.
+
+### Git and remaining work
+
+Existing branch `JS_feat/live-api-verification`, existing PR
+https://github.com/arsalan5shaik/IBM-Z-Datathon-FireWatch/pull/12.
+Implementation commits: `9d475d4` and `fcefe92`; report commit `8d971b3`.
+Both implementation commits were pushed and remote branch existence verified.
+Final CI status is recorded in the final response after checks complete.
+The PR must stay open: budget-blocked science/research acceptance and variable
+research latency remain. Main/Pages are unchanged; LinuxONE remains unverified.
+No Docker work, NASA refresh, ML changes or teammate-branch changes were performed.
+The root checkout's unrelated frontend/.gitignore modification was preserved.
+
+## Initial-run decision (historical)
+
+**NOT READY FOR DOCKER. NOT READY FOR LINUXONE DEPLOYMENT.**
+
+| Gate | Result |
+|---|---|
+| NASA FIRMS ingestion and cached API | PASS |
+| OpenAI credentials, billing access, gpt-5-mini and Responses connectivity | PASS |
+| Live location/weather/detection chat in desktop/mobile Chrome | PASS after corrections |
+| Complete chatbot live acceptance | FAIL / remaining verification BLOCKED by the test budget |
+| Backend automated regression | PASS: 363 tests |
+| Frontend tests, typecheck and production build | PASS: 62 tests |
+| LinuxONE execution | NOT VERIFIED |
+
+Do not merge this verification PR automatically. One elevated-risk question still
+ended in a provider timeout, research corrections need live revalidation, and not
+all requested questions could be executed within the initial paid-test limits.
+Passing mocked tests does not close these live acceptance gaps.
+
+## Environment and repository
+
+Inspected README, FIRMS.md, CHATBOT.md, CHATBOT_VERIFICATION.md, both environment
+examples, actual routers/services/schemas, locked dependencies and all three CI
+workflows. Location, weather, rolling publication, FIRMS frontend and chatbot PRs
+are present on the base. There were no overlapping open PRs at inspection.
+
+The shared main checkout's unrelated `frontend/.gitignore` edit was preserved.
+All work ran in an isolated worktree. Backend `.env` loading is absolute to that
+checkout's backend directory, independent of launch cwd; process variables override
+dotenv. The original developer `.env` was not overwritten. A private ignored copy
+was used for the isolated checkout, then removed after its servers were stopped;
+the original remained untouched. Canonical keys take precedence over legacy
+`LLM_API_KEY` / `FIRMS_MAP_KEY`; the selected OpenAI key was checked without printing it.
+
+| Setting | Verified effective value |
+|---|---|
+| OPENAI_API_KEY / NASA_FIRMS_MAP_KEY | Present; values never printed |
+| OPENAI_MODEL | gpt-5-mini |
+| WEATHER_PROVIDER | open-meteo |
+| FORECAST_HOURS / GRID_RESOLUTION_M | 168 / 3000 |
+| CHAT_ACCESS_MODE | local |
+| JOB_ENABLED / ALLOW_FIXTURE_DATA | false / false |
+| FIRMS products | VIIRS_NOAA20_NRT, VIIRS_NOAA21_NRT |
+| FIRMS_REFRESH_MINUTES | 15 |
+
+For the test servers only, CORS_ORIGINS was set in the process environment to
+`["http://127.0.0.1:5178"]`; no dotenv file was edited. Git ignore checks passed
+for `.env`, FIRMS/weather caches and quota SQLite. No provider secret was passed
+to Vite, the browser or CI. Final byte scanning of 146 changed/built/evidence files found
+none of the configured credentials. Production source paths contain no hardcoded
+Windows drive paths. Test output and screenshots remain outside Git.
+
+## NASA FIRMS
+
+Exactly **one** live `python -m app.jobs.refresh_fires` refresh was run, without
+`--force`. Both official NASA Area CSV products accepted the configured key.
+
+| Product | Valid CA observations | Latest acquisition UTC | Invalid / duplicates | Excluded outside time/CA coverage |
+|---|---:|---|---|---:|
+| VIIRS_NOAA20_NRT | 292 | 2026-10-17T20:49:00Z | 0 / 0 | 28 |
+| VIIRS_NOAA21_NRT | 347 | 2026-10-17T21:31:00Z | 0 / 0 | 65 |
+
+Total: **639** observations in the retained 72-hour dataset. Product fetches
+completed at `2026-10-18T00:40:09.032197Z` and `00:40:08.732858Z`, respectively.
+The cache initially reported healthy/fresh with no provider errors. Its full-source
+fetch timestamp is the older product timestamp. It naturally became stale after
+15 minutes because the polling owner was intentionally stopped; later chat responses
+identified this staleness correctly. No additional forced refresh was performed.
+
+All retained coordinates, UTC timestamps, finite nonnegative FRP, positive brightness
+where present, stable unique IDs and inclusion in the actual Census-derived California
+boundary were checked. The expected ignored `shared/data/provider-cache/firms.json`
+was read back through a new consumer. A cache fetch timestamp is not a satellite
+acquisition timestamp. An empty valid dataset is distinct from a failed provider.
+
+### Actual HTTP checks
+
+| Request | HTTP | Returned / matched | Truncated |
+|---|---:|---:|---|
+| /health/ready | 200 | initialized | n/a |
+| /api/v1/status | 200 | provider state present | n/a |
+| /api/v1/fires/live | 200 | 191 / 191 | false |
+| /api/v1/fires/live?hours=24&limit=500 | 200 | 191 / 191 | false |
+| /api/v1/fires/live?hours=72&limit=500 | 200 | 500 / 639 | true |
+| /api/v1/fires/live?bbox=-122.5,37,-121.5,38&hours=24&limit=500 | 200 | 10 / 10 | false |
+| /api/v1/fires/live?hours=72&limit=1 | 200 | 1 / 639 | true |
+
+GeoJSON FeatureCollection/Point shape, [longitude,latitude], actual product/satellite,
+UTC timestamps, l/n/h confidence, FRP alias equality and MW units, bbox inclusion,
+freshness, limits and pre-limit counts passed. No fixture observations were used.
+Eight malformed hour/limit/bbox/since combinations returned structured 422 errors.
+No cache reads or API startup triggered another NASA request.
+
+The actual `--loop` CLI was started once immediately after refresh, reported
+`not_due`, stayed alive waiting for its next cycle, and was terminated while idle.
+No polling owner remains. A new deterministic job test checks two cycles at 900
+seconds and that `--force` applies only to the first cycle. Existing tests cover
+cross-process ownership, atomic writes, restart persistence, stale/partial fallback,
+corrupt caches, empty/malformed CSV, bad credentials, timeout, 429 and 5xx responses.
+
+## OpenAI chatbot
+
+Actual Responses returned model snapshot **gpt-5-mini-2025-08-07** under configured
+alias **gpt-5-mini**, official SDK 2.54.0. Successful requests establish usable key,
+project/model access and paid API access; the exact account balance was not inspected.
+No alternate model was used. Server tools consumed the real catalog, NASA cache and
+Open-Meteo data. Model-initiated `get_weather` and `research_official_sources`
+function calls also executed with validated arguments.
+
+### Strict budget and expenditure
+
+- 15 real chat HTTP requests, including diagnostics/retests: **8 HTTP 200**, **7 safe
+  error responses**. A 200 was not automatically counted as an accurate answer.
+- 20 real SDK Responses requests: 19 returned token usage; one timed out without
+  usage. Verification disabled SDK retries; production retains its bounded retry.
+- Two hosted research requests produced **three web_search_call output actions**.
+  Every observed action was counted conservatively. Further research was blocked;
+  no automatic paid retries were run after either limit was reached.
+- Measured returned usage: **106,295 input tokens**, including **30,720 cached input**;
+  **12,361 output tokens**, including reasoning. These are token counts, not an invoice.
+- Estimated token component: approximately **$0.0444**, using $0.25/M input,
+  $0.025/M cached input and $2/M output. Conservatively budgeting three $0.01 search
+  actions gives approximately **$0.0744**, excluding any unreported timeout usage
+  or separately billed search content. Actual total debit is UNKNOWN. Rates checked
+  against [model pricing](https://developers.openai.com/api/docs/models/gpt-5-mini)
+  and [tool pricing](https://developers.openai.com/api/docs/pricing).
+
+The opt-in verification server persists counters outside Git, caps 15 chat requests
+and 32 SDK attempts, and stops starting research after three observed actions.
+Native search can emit multiple search/open/find actions despite max_tool_calls=1;
+the client cannot cancel internal completed actions retrospectively. Never treat
+that parameter as a guaranteed exact action count or an account spending limit.
+
+### Requested questions and actual outcomes
+
+| Question | Result / evidence |
+|---|---|
+| What is FireWatch? | PASS: HTTP 200, platform description; no claim that ML/SHAP data exists |
+| Recent satellite detections in California? | Initial accuracy FAIL: retrieval time mislabeled as observation end. Corrected transport/validation; subsequent 200 used actual acquisition end and bounded counts |
+| Latest detections near Sacramento? | Initial numeric-validation 502; final real-browser PASS with actual location/hour, one NOAA-20 observation, stale disclosure |
+| What does fire radiative power mean? | BLOCKED/502 after research budget exhausted: no verified supporting sources, no unsourced definition released |
+| Current weather in Stockton? | Initially rejected valid Fahrenheit conversion; corrected and real-browser PASS |
+| How does wind affect wildfire spread? | BLOCKED: not executed after the paid-test budget was exhausted |
+| Stockton risk over the next seven days? | PASS for unavailable-data behavior: 200 explicitly said forecast_not_ready; no invented risk score/probability |
+| Why elevated predicted risk? | FAIL: first 502 numeric-grounding rejection; after context/list corrections, last live attempt timed out (504). Not signed off |
+| Satellite hotspot versus confirmed wildfire? | BLOCKED: not executed within the remaining paid-test budget; distinction was correct in actual FIRMS answers |
+| What if I receive an evacuation order? | BLOCKED: exact prompt not executed within budget; emergency/mock security cases passed. Related preparation prompt below was tested live |
+
+Stockton's verified selected-hour forecast was `2026-10-18T00:00:00Z`: 31.2 C /
+88.2 F, humidity 19%, precipitation 0.0 mm, wind 9.8 km/h FROM 328 degrees, gusts
+17.3 km/h, sampled at 38.0,-121.5. The real provider refresh was
+`2026-10-18T00:49:48.742910Z`. These are forecasts, not observed street-level conditions.
+
+Sacramento's returned observation was independently cross-checked against the
+backend cache: acquisition `2026-10-17T09:26:00Z`, FRP 20.75 MW, confidence n, one
+match in the selected city bbox. It was not labeled a confirmed wildfire or proof
+that other fires do not exist. The answer correctly separated observation and fetch
+times and identified the aged cache as stale.
+
+### External research and remaining failures
+
+1. CAL FIRE evacuation preparation: real hosted retrieval succeeded and returned six
+   domain-validated citations, including [Get Ready to Go](https://www.fire.ca.gov/prepare/get-ready-to-go).
+   The old emergency guard replaced useful general advice with a current-orders
+   disclaimer. It now distinguishes preparedness from current safety/active-order
+   questions; the correction is regression-tested but not live-retested within budget.
+2. Official California incident updates: a real model function call initiated a hosted
+   retrieval with two completed actions. The old validator required exactly one and
+   incorrectly rejected it, resulting in a final 502. The validator now accepts completed
+   search/open actions while retaining URL/source/annotation checks. Mock regression
+   PASS; fresh live verification is BLOCKED by the three-action budget.
+
+Direct Python requests to the six CAL FIRE URLs returned 403 (access restriction),
+so those requests do not establish full-page content verification. An independent
+research-browser retrieval of the canonical CAL FIRE Get Ready to Go page succeeded,
+confirmed its official title/content and preparation guidance. No page publication
+time was supplied by the hosted tool; citations retain unknown publication times.
+No invented current evacuation orders, incident names, acreage, containment, risk
+scores or SHAP values were observed in successful released data answers.
+
+Two remaining quality issues need review: numeric grounding is a conservative
+text-based guard rather than proof of semantic correctness, and some generated
+follow-up suggestions offered unsupported actions such as immediate FIRMS refresh,
+radius queries or imagery. The actual tools are cache-only/bbox/hour consumers;
+those offers are not verified capabilities. Do not add those features to conceal
+this limitation. The original complete system prompt remains unchanged.
+
+### Corrections and security
+
+Scoped changes: compact detection transport, query-specific acquisition ranges,
+explicit fetch/sample metadata and lookback/bbox, verified Fahrenheit conversion,
+timestamp field validation, verified forecast/grid context, numbered-list handling,
+preparedness distinction, and multiple completed research-action compatibility.
+Nine added regressions/job tests raised the full backend total from 354 to 363.
+Existing invented-score/weather/SHAP and prompt-injection rejection assertions remain.
+
+Mock tests cover missing/invalid keys, OpenAI timeout/429, unavailable research,
+missing NASA/weather/ML/SHAP, input/history/output/tool/research bounds, hostile
+URLs/content, secret rejection, concurrency/leases, shared rate limits and disconnect
+cancellation. Actual production-app remote-peer testing returned **403** before an
+OpenAI SDK client was created. The local listener was never exposed publicly.
+Rate limits/authentication are not replaced with permissive test settings.
+
+## Automated and frontend verification
+
+| Check | Final result |
+|---|---|
+| uv run --no-sync python -m pytest -q | PASS: 363 passed, 0 failed/skipped/errors |
+| Ruff check / format --check | PASS; 87 Python files formatted |
+| scripts/smoke.py and --fixtures | PASS, isolated real HTTP startup/shutdown |
+| npm test | PASS: 62 tests, 10 files |
+| npm run typecheck / npm run build | PASS |
+| Real Chrome integration | PASS: five checks, zero JS errors, no CORS errors |
+| Paid/research tests in normal CI | Not run; explicit opt-in scripts only |
+
+The existing Starlette/httpx deprecation warning and Vite future native-config
+import warning remain. Earlier development failures were corrected; their passing
+regressions do not override the outstanding live acceptance failures above.
+
+Real browser checks used actual FastAPI, OpenAI, FIRMS and Open-Meteo, with **no
+mocked API responses**. MapLibre rendered actual backend observation IDs; the
+48-hour frontend view loaded 459 records and 191 were rendered in the tested view.
+The selected hotspot panel showed its actual UTC acquisition/confidence/FRP.
+Stockton-to-Sacramento switching preserved selected UTC time and used the new ID;
+loading, sources, stale labels and 390px mobile layout passed. Screenshots were
+visually inspected. Expected unavailable integrations returned incidents 404 and
+risk 503; these are not successful incident/model integrations. Prior mocked
+tests cover outage, retry, late responses and XSS; they are not labeled live tests.
+
+Evidence remains in the local temporary `firewatch-live-api-results` directory:
+`budget.json`, `answers.json`, `firms-endpoints.json`, `source-urls.json`,
+`browser.json`, `real-firms-desktop.png`, `real-chat-stockton.png`,
+`real-chat-mobile.png`, plus earlier failure evidence. Do not commit/upload raw
+paid output or credentials as CI artifacts.
+
+## Reproducible commands
+
+From backend with the locked Python environment (the local uv executable was
+invoked through its existing installed Python module because uv was not on PATH):
+
+```powershell
+uv sync --locked --python 3.11
+uv run --no-sync python -m pytest -q
+uv run --no-sync python -m ruff check .
+uv run --no-sync python -m ruff format --check .
+uv run --no-sync python scripts/smoke.py
+uv run --no-sync python scripts/smoke.py --fixtures
+```
+
+The one controlled NASA command and stopped loop check were:
+
+```powershell
+uv run --no-sync python -m app.jobs.refresh_fires
+uv run --no-sync python -u -m app.jobs.refresh_fires --loop
+# Stop the one loop owner after its not_due result; do not force another refresh.
+```
+
+Normal production-code local startup remains:
+
+```powershell
+uv run --no-sync uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000 --no-access-log
+```
+
+For a **newly authorized paid test run only**, the instrumented local server uses
+the same real app/SDK and provides persistent usage/call counters. It disables SDK
+retries to limit diagnostic cost; no response is mocked. The current run's saved
+budget is exhausted: do not remove/reset it to evade the limits.
+
+```powershell
+$env:FIREWATCH_RUN_PAID_VERIFICATION='1'
+$env:CORS_ORIGINS='["http://127.0.0.1:5178"]'
+uv run --no-sync python scripts/live_verification_server.py
+# In frontend, separate shell:
+npm ci --no-audit --no-fund
+npm test
+npm run typecheck
+npm run build
+npm run dev -- --host 127.0.0.1 --port 5178 --strictPort
+# Separate frontend shell; exactly two submissions:
+$env:FIREWATCH_RUN_PAID_VERIFICATION='1'
+node scripts/verify-live-apis.mjs
+```
+
+Optional `FIREWATCH_VERIFY_CAPTURE_OUTPUT=1` records credential-screened model
+output only in the private temporary budget file for diagnosis; leave it off for
+routine use. Never run either paid script in normal CI. The older
+scripts/chat_live_smoke.py was inspected but not separately executed: it would
+consume more paid calls/searches and does not exercise the HTTP endpoint.
+
+## Deployment readiness audit
+
+| Item | Status | Evidence / requirement |
+|---|---|---|
+| FastAPI startup, liveness/readiness, shutdown | PASS | Both process/HTTP smoke modes |
+| Readiness meaning | PASS | Initialization probe; provider/ML availability checked separately in status |
+| Separate API and FIRMS owner | PASS | GETs cache-only; separate CLI/lock/loop; owner stopped |
+| Persistent cache/SQLite paths | PASS locally | Configurable paths, atomic cache, leases, restart tests |
+| Linux persistent-volume permissions/locking/fsync | NOT VERIFIED | Must test actual deployment filesystem and account |
+| s390x dependency resolution | PASS as a dry-run only | Locked no-dev, no-build target resolution below |
+| LinuxONE binary imports/runtime/TLS | NOT VERIFIED | No s390x host was available; Windows/x86 CI is not proof |
+| Frontend build | PASS locally | Locked Node tooling/test/typecheck/build |
+| Native frontend build on s390x | NOT VERIFIED | Prefer existing CI-built static assets; do not assume native build-tool support |
+| California location/boundary assets | PASS in checkout | Mount/include frontend/public/data; backend wheel alone does not package these |
+| Environment injection / secret separation | PASS locally | Canonical settings, ignored dotenv/cache, no frontend credentials |
+| Hardcoded Windows production paths | PASS | None found in backend/app or frontend/src |
+| Production CORS/HTTPS/authenticated gateway | BLOCKED | Local-only setup; no public authenticated backend deployed |
+| Main Pages deployment trigger | PASS by inspection | All main pushes; no paths restriction; static frontend only |
+| Predictions/SHAP | BLOCKED | Real artifact/service contracts unavailable; no substitutes |
+| Chat end-to-end reliability | FAIL | Timeout, research revalidation and remaining question coverage unresolved |
+| Image secret exclusion | NOT VERIFIED | No image or Dockerfile created; future build context must exclude dotenv/caches/QA evidence |
+
+Resolution-only command (does not install or prove execution on s390x):
+
+```powershell
+uv sync --locked --no-dev --python-platform s390x-unknown-linux-gnu --no-build --dry-run
+```
+
+Next: authorize a separate small live verification budget to recheck corrected
+research/preparedness and elevated-risk behavior, remaining science/emergency
+questions and unsupported suggestions. Then verify LinuxONE Python/native imports,
+provider egress, CA assets and persistent-directory ownership/locking. Decide
+deployment mounts, single refresh-owner supervision, HTTPS/CORS/authenticated
+gateway and secret injection before proceeding with Docker. No paid hosting or
+container implementation is authorized by this verification report.

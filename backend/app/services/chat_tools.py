@@ -2,21 +2,27 @@
 
 import asyncio
 import json
+import logging
 import re
 from datetime import UTC, datetime, timedelta
+from time import perf_counter
 
 from pydantic import ValidationError
 
 from app.errors import APIError
 from app.schemas.chat import ChatSource, ResearchArgs, SearchArgs, TimeArgs, ToolArgs
+from app.services.chat_reference import ANSWERS, REVIEWED_AT, SOURCES, evidence
 from app.services.chat_research import research
 from app.services.chat_time import forecast_hour, resolve_time
 from app.services.forecast_store import category
 from app.services.grid import CA_BBOX
 from app.services.jsonio import reject_constant, unique_pairs
 from app.services.locations import normalize as normalize_location
+from app.services.openai_client import TRACE
 from app.services.time import iso
 from app.services.weather_cache import hour_revision, sample_point, selected_hour
+
+logger = logging.getLogger("firewatch.chat")
 
 TOOL_MODELS = {
     "search_locations": SearchArgs,
@@ -112,12 +118,25 @@ class ChatTools:
         self.emergency = bool(
             re.search(r"evacuat|shelter|immediate danger|emergency|safe to", request.message, re.I)
         )
+        self.preparedness = bool(
+            re.search(r"prepar|if I (?:receive|get)|should I do if", request.message, re.I)
+        ) and not bool(
+            re.search(
+                r"current|active|right now|in effect|am I safe|immediate danger",
+                request.message,
+                re.I,
+            )
+        )
+        # FRP/confidence/hotspot definitions come from the official FIRMS reference
+        # (chat_reference), so they no longer require paid research by themselves.
         self.needs_research = self.emergency or bool(
             re.search(
                 (
                     "confirmed|active wildfires|camp "
                     "fire|histor|caused|warnings|policy|science|prepared|prevent|air "
                     "quality|smoke"
+                    "|how.*wind.*(?:affect|spread)"
+                    "|official.*(?:incident|updates)"
                 ),
                 request.message,
                 re.I,
@@ -126,7 +145,11 @@ class ChatTools:
 
     def register(self, name, result):
         key = f"fw-{len(self.sources) + 1}"
-        valid = result.get("forecast_hour") or result.get("metadata", {}).get("observation_end")
+        valid = (
+            result.get("forecast_hour")
+            or result.get("observation_end")
+            or result.get("metadata", {}).get("observation_end")
+        )
         freshness = (
             result.get("cache_status")
             or result.get("metadata", {}).get("cache_status")
@@ -151,7 +174,52 @@ class ChatTools:
         self.evidence[key] = result
         return result | {"source_id": key}
 
+    def reference(self, topic):
+        """Register official FIRMS definitions: no network, model or provider call."""
+        rows = []
+        for source_id in dict.fromkeys(re.findall(r"\[(ref-[^\]]+)\]", ANSWERS[topic])):
+            if source_id not in self.sources:
+                page = SOURCES[source_id]
+                self.sources[source_id] = ChatSource(
+                    id=source_id,
+                    kind="reference",
+                    title=page["title"],
+                    provider="NASA FIRMS",
+                    url=page["url"],
+                    retrieved_at=REVIEWED_AT,
+                    freshness=f"Official definition reviewed {REVIEWED_AT[:10]}; not fetched live",
+                    scope="Definition; not location-specific",
+                )
+                self.evidence[source_id] = evidence(source_id)
+            rows.append(self.evidence[source_id] | {"source_id": source_id})
+        if "firewatch_reference" not in self.used:
+            self.used.append("firewatch_reference")
+        return {
+            "status": "available",
+            "topic": topic,
+            "definition": ANSWERS[topic],
+            "sources": rows,
+        }
+
     async def execute(self, name, arguments):
+        started = perf_counter()
+        try:
+            return await self._execute(name, arguments)
+        finally:
+            duration = round((perf_counter() - started) * 1000)
+            tool = name if name in TOOL_MODELS else "unsupported"
+            trace = TRACE.get()
+            if trace is not None:
+                trace.tools.append({"tool": tool, "duration_ms": duration})
+            # Names only, never arguments, user messages, credentials or results.
+            logger.info(
+                "chat_tool_completed tool=%s duration_ms=%d",
+                tool,
+                duration,
+                extra={"tool": tool, "duration_ms": duration},
+            )
+
+    async def _execute(self, name, arguments):
         if len(self.used) >= self.settings.chat_max_tool_calls:
             raise APIError(
                 "chat_tool_limit", "Chat tool budget exhausted; ask a narrower question", 422
@@ -189,7 +257,15 @@ class ChatTools:
                 }
             self.research_calls += 1
             try:
-                result = await research(self.client, args.query, self.now, self.emergency)
+                # Current-order questions stay on local authorities; general
+                # preparedness may also use federal guidance such as ready.gov.
+                result = await research(
+                    self.client, args.query, self.now, self.emergency and not self.preparedness
+                )
+                if result.get("partial_retrieval"):
+                    self.limitations.append(
+                        "Some research actions failed; only completed retrievals support citations"
+                    )
                 registered = []
                 for item in result["sources"]:
                     source = ChatSource.model_validate(item)
@@ -226,6 +302,7 @@ class ChatTools:
                 [(entry, freshness)] = await self.state.weather.get([point])
                 row = selected_hour(entry, hour)
                 result = row.model_dump(mode="json") | {
+                    "temperature_f": round(row.temperature_c * 9 / 5 + 32, 1),
                     "status": "available",
                     "source": "Open-Meteo",
                     "data_kind": "forecast",
@@ -253,11 +330,58 @@ class ChatTools:
                 )
                 return self.register(
                     name,
-                    data.model_dump(mode="json")
-                    | {
+                    {
                         "status": "available",
                         "source": "NASA FIRMS",
                         "not_confirmed_incidents": True,
+                        # Keep acquisition time separate from retrieval and coverage
+                        # metadata. A compact transport also avoids sending the full
+                        # GeoJSON/provider diagnostics to the paid model.
+                        **{
+                            key: data.metadata[key]
+                            for key in (
+                                "cache_status",
+                                "stale",
+                                "fetched_at",
+                                "requested_since",
+                                "requested_hours",
+                                "matched_count",
+                                "returned_count",
+                                "truncated",
+                                "partial_sources",
+                                "partial_time_coverage",
+                                "units",
+                            )
+                        },
+                        "observation_start": min(
+                            (f.properties["acquired_at"] for f in data.features), default=None
+                        ),
+                        "observation_end": max(
+                            (f.properties["acquired_at"] for f in data.features), default=None
+                        ),
+                        "observation_time_scope": "Acquisition range of returned observations",
+                        "query_bbox": list(bounds),
+                        "geographic_scope": "Location bounding box, not a distance-radius search",
+                        "detections": [
+                            {
+                                "coordinates": feature.geometry["coordinates"],
+                                "confidence_label": {"l": "low", "n": "nominal", "h": "high"}.get(
+                                    feature.properties["confidence"], "unknown"
+                                ),
+                                **{
+                                    key: feature.properties[key]
+                                    for key in (
+                                        "id",
+                                        "acquired_at",
+                                        "product",
+                                        "satellite",
+                                        "confidence",
+                                        "frp_mw",
+                                    )
+                                },
+                            }
+                            for feature in data.features
+                        ],
                     },
                 )
             if name == "get_risk":

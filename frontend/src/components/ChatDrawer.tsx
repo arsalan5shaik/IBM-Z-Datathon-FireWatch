@@ -12,7 +12,7 @@ const DATASET_LABEL: Record<string, string> = { risk: 'Risk forecast', weather: 
 
 function suggestions(hasContext: boolean): string[] {
   return hasContext
-    ? ['What is the weather tomorrow?', 'How strong will the winds be tomorrow?', 'Why is this area at elevated wildfire risk?', 'Are there active wildfires nearby?']
+    ? ['What is the weather tomorrow?', 'How strong will the winds be tomorrow?', 'Are wildfire predictions and explanations available?', 'Show recent cached satellite detections in this area.']
     : ['What are the California fire weather warnings?', 'What caused the Camp Fire?', 'How does FireWatch predict wildfire risk?', 'What wildfire data is available?'];
 }
 

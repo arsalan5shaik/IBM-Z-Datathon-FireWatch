@@ -256,7 +256,7 @@ export interface ChatResponse {
 
 export interface ChatSource {
   id: string;
-  kind: 'firewatch' | 'research';
+  kind: 'firewatch' | 'research' | 'reference';
   title: string;
   provider: string;
   url: string | null;
