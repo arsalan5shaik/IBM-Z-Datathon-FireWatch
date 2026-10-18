@@ -37,6 +37,12 @@ Confirmed causes and targeted changes:
   FIRMS `unavailable`, `stale=true`, `credentials_missing`, and no success timestamp.
   Heartbeat health is not presented as ingestion freshness. Existing FIRMS tests
   also cover stale-cache retention after provider errors.
+- The optional full local s390x suite exposed one further test-startup race:
+  444 passed, but the spawned process-lock helper missed its 15-second readiness
+  deadline while importing the entire FastAPI integration module under QEMU.
+  The same lock/recovery test passed in isolation. Its helper now lives in a
+  lightweight module importing only the real filesystem lock; readiness and
+  recovery assertions, deadlines and production locking code remain unchanged.
 
 Completed repair checks on the merged source:
 
@@ -51,7 +57,8 @@ Completed repair checks on the merged source:
 | FastAPI subprocess smoke, unavailable and fixture modes | PASS on Windows and amd64 |
 | Both runtime images, amd64 and s390x | Built successfully with the existing pinned bases and unchanged dependency locks |
 | Emulated s390x Node dependency/typecheck/production build | PASS with the existing CSS-minification fallback |
-| amd64 Compose lifecycle and provider-error/liveness distinction | PASS |
+| amd64 and QEMU s390x Compose lifecycle and provider-error/liveness distinction | PASS on both architectures |
+| Browser against QEMU s390x frontend/backend | PASS; no JavaScript errors, status 200, unavailable fires 503 and chat denied 403 |
 | Runtime image layers, both architectures | PASS; no dotenv, local state or embedded credential environment values |
 
 The full s390x suite, Compose/browser rechecks and final CI outcomes are recorded
