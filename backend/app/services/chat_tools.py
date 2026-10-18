@@ -17,6 +17,7 @@ from app.services.forecast_store import category
 from app.services.grid import CA_BBOX
 from app.services.jsonio import reject_constant, unique_pairs
 from app.services.locations import normalize as normalize_location
+from app.services.openai_client import TRACE
 from app.services.time import iso
 from app.services.weather_cache import hour_revision, sample_point, selected_hour
 
@@ -175,15 +176,17 @@ class ChatTools:
         try:
             return await self._execute(name, arguments)
         finally:
+            duration = round((perf_counter() - started) * 1000)
+            tool = name if name in TOOL_MODELS else "unsupported"
+            trace = TRACE.get()
+            if trace is not None:
+                trace.tools.append({"tool": tool, "duration_ms": duration})
             # Names only, never arguments, user messages, credentials or results.
             logger.info(
                 "chat_tool_completed tool=%s duration_ms=%d",
-                name if name in TOOL_MODELS else "unsupported",
-                round((perf_counter() - started) * 1000),
-                extra={
-                    "tool": name if name in TOOL_MODELS else "unsupported",
-                    "duration_ms": round((perf_counter() - started) * 1000),
-                },
+                tool,
+                duration,
+                extra={"tool": tool, "duration_ms": duration},
             )
 
     async def _execute(self, name, arguments):
@@ -224,7 +227,11 @@ class ChatTools:
                 }
             self.research_calls += 1
             try:
-                result = await research(self.client, args.query, self.now, self.emergency)
+                # Current-order questions stay on local authorities; general
+                # preparedness may also use federal guidance such as ready.gov.
+                result = await research(
+                    self.client, args.query, self.now, self.emergency and not self.preparedness
+                )
                 if result.get("partial_retrieval"):
                     self.limitations.append(
                         "Some research actions failed; only completed retrievals support citations"

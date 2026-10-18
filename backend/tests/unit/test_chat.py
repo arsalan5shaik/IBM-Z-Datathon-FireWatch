@@ -155,6 +155,11 @@ def run(awaitable):
     return asyncio.run(awaitable)
 
 
+def mock_http(handler):
+    """Production ResponsesClient/SDK construction over a mocked transport."""
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
 def request(message="Weather in Stockton", **kwargs):
     return ChatRequest(message=message, location_id=PLACE, selected_hour=NOW, **kwargs)
 
@@ -589,11 +594,7 @@ def test_official_sdk_mock_http_uses_responses_exact_model_and_no_remote_storage
         return httpx.Response(200, json=final().model_dump(mode="json"))
 
     async def scenario():
-        wrapper = ResponsesClient(setup[0].state.settings)
-        wrapper.client = openai.AsyncOpenAI(
-            api_key="fixture-no-real-key",
-            http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
-        )
+        wrapper = ResponsesClient(setup[0].state.settings, http_client=mock_http(handler))
         try:
             await wrapper.create(
                 input="California wildfire weather", instructions=FIREWATCH_SYSTEM_PROMPT
@@ -605,7 +606,7 @@ def test_official_sdk_mock_http_uses_responses_exact_model_and_no_remote_storage
     assert seen[0]["model"] == "gpt-5-mini" and seen[0]["store"] is False
     assert seen[0]["instructions"] == FIREWATCH_SYSTEM_PROMPT
     assert seen[0]["max_output_tokens"] == 2500
-    assert "fixture-no-real-key" not in json.dumps(seen)
+    assert "test-key-fixture-only" not in json.dumps(seen)
 
 
 def test_prompt_injection_cannot_create_arbitrary_tools_or_credential_output(setup):
@@ -807,20 +808,21 @@ def test_fetch_timestamp_cannot_be_labeled_observation_end(setup):
 
 
 def test_preparedness_research_preserves_guidance_without_claiming_current_orders(setup):
-    instance, _, _ = service(
+    instance, client, _ = service(
         setup,
-        model_response("CAL FIRE preparation guidance.", web=True),
-        final(
-            "Prepare a go bag and follow official evacuation instructions. [research-1-web-1]",
-            ["research-1-web-1"],
-        ),
+        model_response("Prepare a go bag and follow official evacuation instructions.", web=True),
     )
     result = run(
         instance.answer(request("What does CAL FIRE recommend for evacuation preparation?"))
     )
     assert "Prepare a go bag" in result.answer
+    assert "cannot verify current evacuation orders" not in result.answer
     assert result.sources[0].published_at is None
     assert SOURCE_URL in result.answer
+    # Research-only: the natively cited research answer needs no synthesis call.
+    assert len(client.calls) == 1 and result.model == "gpt-5-mini"
+    # General preparedness may use federal guidance; current orders stay local.
+    assert "ready.gov" in client.calls[0]["tools"][0]["filters"]["allowed_domains"]
 
 
 def test_detection_time_range_never_implies_other_locations_observations(setup):
@@ -943,14 +945,16 @@ def test_followups_are_server_owned_supported_actions(setup):
     ],
 )
 def test_science_and_official_updates_research_before_model_memory(setup, question):
-    instance, client, _ = service(
+    instance, client, provider = service(
         setup,
         model_response("Authoritative explanation.", web=True),
-        final("Verified wildfire science. [research-1-web-1]", ["research-1-web-1"]),
     )
     result = run(instance.answer(request(question)))
     assert result.sources[-1].kind == "research"
     assert client.calls[0]["tools"][0]["type"] == "web_search"
+    # General science is not a local forecast request: no weather fetch/numbers.
+    assert result.tools_used == ["research_official_sources"] and provider.calls == 0
+    assert len(client.calls) == 1 and SOURCE_URL in result.answer
 
 
 @pytest.mark.parametrize("status,expected", [(503, 2), (429, 2), (401, 1)])
@@ -964,12 +968,7 @@ def test_sdk_retry_is_bounded_and_auth_is_not_retried(setup, status, expected):
         )
 
     async def scenario():
-        wrapper = ResponsesClient(setup[0].state.settings)
-        wrapper.client = openai.AsyncOpenAI(
-            api_key="fixture",
-            max_retries=1,
-            http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
-        )
+        wrapper = ResponsesClient(setup[0].state.settings, http_client=mock_http(handler))
         try:
             with pytest.raises(APIError):
                 await wrapper.create(input="California wildfire")
@@ -988,12 +987,7 @@ def test_sdk_timeout_retry_has_only_two_attempts(setup):
         raise httpx.ReadTimeout("fixture timeout", request=req)
 
     async def scenario():
-        wrapper = ResponsesClient(setup[0].state.settings)
-        wrapper.client = openai.AsyncOpenAI(
-            api_key="fixture",
-            max_retries=1,
-            http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
-        )
+        wrapper = ResponsesClient(setup[0].state.settings, http_client=mock_http(handler))
         try:
             with pytest.raises(APIError) as error:
                 await wrapper.create(input="California wildfire")
@@ -1063,13 +1057,11 @@ def test_inline_numbered_steps_are_formatting_not_risk_values(setup):
 
 
 def test_conditional_evacuation_advice_is_not_current_order_check(setup):
-    instance, _, _ = service(
+    instance, client, _ = service(
         setup,
-        model_response("CAL FIRE preparedness guidance.", web=True),
-        final(
-            "If you receive an evacuation order, leave promptly following local authorities. "
-            "[research-1-web-1]",
-            ["research-1-web-1"],
+        model_response(
+            "If you receive an evacuation order, leave promptly following local authorities.",
+            web=True,
         ),
     )
     result = run(
@@ -1077,6 +1069,7 @@ def test_conditional_evacuation_advice_is_not_current_order_check(setup):
     )
     assert "leave promptly" in result.answer
     assert "cannot verify current evacuation orders" not in result.answer
+    assert len(client.calls) == 1
 
 
 def test_cited_server_retrieval_time_is_evidence_not_a_model_invention(setup):
@@ -1114,12 +1107,7 @@ def test_transient_sdk_failure_recovers_on_only_allowed_retry(setup):
         return httpx.Response(200, json=final().model_dump(mode="json"))
 
     async def scenario():
-        wrapper = ResponsesClient(setup[0].state.settings)
-        wrapper.client = openai.AsyncOpenAI(
-            api_key="fixture",
-            max_retries=1,
-            http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
-        )
+        wrapper = ResponsesClient(setup[0].state.settings, http_client=mock_http(handler))
         try:
             assert (await wrapper.create(input="California wildfire")).status == "completed"
         finally:

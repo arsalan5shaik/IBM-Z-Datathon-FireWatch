@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = Field(default=None, repr=False)
     openai_model: str = Field(default="gpt-5-mini", min_length=1, max_length=100)
     openai_timeout_seconds: float = Field(default=25, ge=1, le=60)
+    # Hosted web research routinely takes 20-30 s; a shorter attempt timeout
+    # cancels research that would have succeeded and then pays for it twice.
+    openai_research_timeout_seconds: float = Field(default=45, ge=5, le=85)
+    openai_max_retries: int = Field(default=1, ge=0, le=2)
     openai_max_output_tokens: int = Field(default=2500, ge=256, le=8000)
     chat_max_history_messages: int = Field(default=10, ge=0, le=20)
     chat_max_message_length: int = Field(default=2000, ge=1, le=8000)

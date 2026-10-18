@@ -1,18 +1,24 @@
 """Bounded Responses tool loop; server evidence and citations survive model failures."""
 
 import json
+import logging
 import re
 from datetime import UTC, datetime
+from time import perf_counter
 
 from app.errors import APIError
 from app.prompts.firewatch_system import FIREWATCH_SYSTEM_PROMPT
 from app.schemas.chat import ChatResponse, FinalAnswer
-from app.services.chat_research import verified_url
+from app.services.chat_research import canonical_url, verified_url
 from app.services.chat_time import forecast_hour, resolve_time
 from app.services.chat_tools import ChatTools, mentioned_locations, tool_definitions
 from app.services.jsonio import reject_constant, unique_pairs
-from app.services.openai_client import ResponsesClient, output_items
+from app.services.openai_client import TRACE, ChatTrace, ResponsesClient, output_items
 from app.services.time import iso
+
+logger = logging.getLogger("firewatch.chat")
+# The client returns its own timeout before the router cancels the whole request.
+DEADLINE_MARGIN_SECONDS = 2
 
 REFUSAL = (
     "I specialize in California wildfire information. I can help with "
@@ -30,9 +36,26 @@ SCOPE = re.compile(
 FOLLOWUP = re.compile(
     r"^(and |what about |how about |why\??$|tomorrow\??$|today\??$|this weekend\??$)", re.I
 )
+OFFER = (
+    r"(?:\bI(?:'ll| will| can| could|'d| would)\b|would you like|do you want|want me to"
+    r"|let me|shall I|can I|\btry an?\b|\brequest an?\b|\brun an?\b)"
+)
+# Radius results and on-demand refresh/inference are never real capabilities.
+# Imagery is only rejected when offered: wildfire science legitimately describes it.
 UNSUPPORTED = re.compile(
-    r"radius|\bimagery\b|satellite images?|(?:refresh|re-?run|regenerat|trigger|force)"
-    r"[^.!?\n]{0,70}(?:FIRMS|satellite|detections|risk|SHAP|inference)",
+    r"radius|(?:refresh|re-?run|regenerat|trigger|force)"
+    r"[^.!?\n]{0,70}(?:FIRMS|satellite|detections|risk|SHAP|inference)"
+    rf"|{OFFER}[^.!?\n]{{0,70}}(?:\bimagery\b|satellite images?)",
+    re.I,
+)
+GENERAL_SCIENCE = re.compile(
+    r"\bhow (?:does|do|can|might|will)\b[^?]*\b(?:affect|spread|influence|drive|change)"
+    r"|\bscience\b",
+    re.I,
+)
+LOCAL_CUE = re.compile(
+    r"forecast|today|tonight|tomorrow|weekend|\bnow\b|current|right now"
+    r"|this (?:week|morning|afternoon|evening)|\bhere\b|my (?:area|location)",
     re.I,
 )
 
@@ -67,6 +90,44 @@ class ChatService:
         await self.client.close()
 
     async def answer(self, request):
+        started = perf_counter()
+        trace = ChatTrace(
+            deadline=started + self.settings.chat_timeout_seconds - DEADLINE_MARGIN_SECONDS
+        )
+        token = TRACE.set(trace)
+        result = "error"
+        try:
+            reply = await self._answer(request)
+            result = reply.mode
+            return reply
+        except APIError as error:
+            result = error.code
+            raise
+        finally:
+            TRACE.reset(token)
+            stages = {"research": 0, "synthesis": 0}
+            for row in trace.attempts:
+                stages[row["stage"]] += row["duration_ms"]
+            # Timings and outcome classes only; never message text or arguments.
+            logger.info(
+                "chat_request_summary result=%s total_ms=%d tool_ms=%d research_ms=%d "
+                "synthesis_ms=%d model_attempts=%d outcomes=%s",
+                result,
+                round((perf_counter() - started) * 1000),
+                # FireWatch reads only; research time is reported by its model stage.
+                sum(
+                    row["duration_ms"]
+                    for row in trace.tools
+                    if row["tool"] != "research_official_sources"
+                ),
+                stages["research"],
+                stages["synthesis"],
+                len(trace.attempts),
+                ",".join(row["outcome"] for row in trace.attempts) or "none",
+                extra={"result": result, "model_attempts": len(trace.attempts)},
+            )
+
+    async def _answer(self, request):
         if (
             len(request.message) > self.settings.chat_max_message_length
             or len(request.history) > self.settings.chat_max_history_messages
@@ -123,7 +184,16 @@ class ChatService:
             interpreted = {"hour": iso(tools.hour), "interpretation": "Selected forecast hour"}
         preflight = []
         question = routing_message.lower()
-        if re.search(r"weather|wind|humid|rain|temperature|gust", question) and tools.location:
+        # "How does wind affect spread?" is science, not a request for the local
+        # forecast; fetching one would add latency and invite unrelated numbers.
+        science = bool(GENERAL_SCIENCE.search(question)) and not (
+            mentioned or LOCAL_CUE.search(question)
+        )
+        if (
+            re.search(r"weather|wind|humid|rain|temperature|gust", question)
+            and tools.location
+            and not science
+        ):
             name = "get_wind" if "wind" in question else "get_weather"
             preflight.append(await tools.execute(name, "{}"))
         if re.search(
@@ -136,14 +206,57 @@ class ChatService:
         if "shap" in question or ("why" in question and "risk" in question):
             preflight.append(await tools.execute("get_shap", "{}"))
         if tools.needs_research:
-            query = request.message + (
+            query = routing_message + (
                 f"; selected California location: {tools.location.display_name}"
-                if tools.location
+                if tools.location and not science
                 else "; California"
             )
             preflight.append(
                 await tools.execute("research_official_sources", json.dumps({"query": query[:400]}))
             )
+        research_text = (preflight[-1].get("summary") or "").strip() if preflight else ""
+        if (
+            tools.used == ["research_official_sources"]
+            and preflight[-1].get("status") == "available"
+            and research_text
+        ):
+            # Research-only question: the hosted answer already carries native,
+            # validated citations. A second synthesis call would only paraphrase
+            # it (about 6.5 s and several thousand tokens). It still passes the
+            # normal validator; if it fails, fall back to normal synthesis.
+            ids = [key for key, row in tools.sources.items() if row.kind == "research"]
+            registered = {canonical_url(tools.sources[key].url) for key in ids}
+            if not any(
+                canonical_url(url) in registered
+                for url in re.findall(r"https?://[^\s)\]>]+", research_text)
+            ):
+                # Citations must stay visible even if the text has no inline links.
+                research_text += "\n\nSources: " + " ".join(f"[{key}]" for key in ids)
+            final = FinalAnswer(
+                within_scope=True,
+                answer=research_text[:12000],
+                source_ids=ids,
+                limitations=[],
+                suggested_questions=[],
+            )
+            try:
+                return self.finalize(final, tools, request)
+            except APIError as error:
+                logger.info("chat_direct_research_rejected code=%s", error.code)
+        if tools.needs_research and not any(
+            row.kind == "research" for row in tools.sources.values()
+        ):
+            # finalize() always replaces this answer with the server's research-
+            # unavailable (or current-orders) notice, so a model call is wasted.
+            final = FinalAnswer(
+                within_scope=True,
+                answer="Research unavailable.",
+                source_ids=[],
+                limitations=[],
+                suggested_questions=[],
+            )
+            reply = self.finalize(final, tools, request)
+            return reply.model_copy(update={"model": None, "mode": "data_unavailable"})
         # Preflight has already supplied these results. Do not offer the same
         # reads/research again. A model-only risk question cannot be answered by
         # fetching unrelated weather or researching generic risk factors.
@@ -160,9 +273,10 @@ class ChatService:
             # from validated availability results, avoiding paid speculation and
             # upstream latency. The ordinary output validator still checks this.
             ids = list(tools.sources)
+            area = tools.location.display_name if tools.location else "California"
             answer = (
-                "Validated FireWatch wildfire predictions are unavailable for "
-                f"this location in the {self.settings.forecast_hours}-hour forecast window. "
+                f"Validated FireWatch wildfire predictions are unavailable for {area} "
+                f"in the {self.settings.forecast_hours}-hour forecast window. "
                 "I cannot assign a risk level or explain an elevated prediction "
                 "without actual model output. "
                 if "get_risk" in tools.used
@@ -297,9 +411,11 @@ the server supplies supported follow-ups. Do not append 'I can' action menus.
         inline = set(re.findall(r"\[((?:fw|research)-[^\]]+)\]", answer))
         if not inline <= cited:
             raise APIError("chat_citation_invalid", "AI inline citation is unverified", 502)
-        allowed_urls = {source.url for source in tools.sources.values() if source.url}
+        # Canonical comparison: a tracking parameter or fragment does not make a
+        # registered source unverified, but every URL must still be registered.
+        allowed_urls = {canonical_url(s.url) for s in tools.sources.values() if s.url}
         for url in re.findall(r"https?://[^\s)\]>]+", answer):
-            if url not in allowed_urls or not verified_url(url):
+            if canonical_url(url) not in allowed_urls or not verified_url(url):
                 raise APIError("chat_citation_invalid", "AI returned an unverified URL", 502)
         secret = self.client.key.get_secret_value() if self.client.key else None
         if (
