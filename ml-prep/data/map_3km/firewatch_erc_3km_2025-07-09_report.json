@@ -1,0 +1,28 @@
+{
+  "date": "2025-07-09",
+  "grid_cells_total": 46244,
+  "cell_dimension_m": [
+    3000,
+    3000
+  ],
+  "valid_cells": 46092,
+  "excluded_cells": 152,
+  "coverage_pct": 99.67130871031917,
+  "negative_predictions_clipped_for_display": 0,
+  "status_counts": {
+    "ok": 46092,
+    "missing_required_features": 152
+  },
+  "map_csv": "/home/linux1/firewatch/data/map_3km/firewatch_erc_3km_2025-07-09.csv",
+  "model": "/home/linux1/firewatch/models/releases/firewatch_erc_v6_2023_2025/model.json",
+  "data_kind": "historical_observed_weather_ERC_G_reconstruction",
+  "NOT_wildfire_probability": true,
+  "NOT_future_forecast": true,
+  "warnings": [
+    "Source gridMET weather is coarser than the 3 km display grid",
+    "3 km boundary is provisional/simplified and must be approved before production",
+    "Training used only 600 cells; other cells are out-of-sample geography",
+    "No red/amber/green categories are calibrated; do not interpret ERC as percent risk",
+    "Clipped display estimates are not original model predictions"
+  ]
+}

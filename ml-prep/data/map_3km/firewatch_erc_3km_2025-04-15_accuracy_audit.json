@@ -1,0 +1,93 @@
+{
+  "date": "2025-04-15",
+  "grid_total": 46244,
+  "predicted_cells": 46092,
+  "reference_valid_cells": 46242,
+  "matched_valid_cells": 46092,
+  "coverage_pct_of_grid": 99.67130871031918,
+  "source_pixel_count_for_evaluated_cells": 24429,
+  "status_counts": {
+    "ok": 46092,
+    "missing_required_features": 152
+  },
+  "overall": {
+    "n": 46092,
+    "r2": 0.9430702742359006,
+    "mae": 4.539785767161328,
+    "rmse": 5.812462072919256,
+    "bias": 2.2258311494402503,
+    "p95_absolute_error": 11.488892499999976,
+    "observed_mean": 52.509481037924154,
+    "predicted_mean": 54.73531218736441
+  },
+  "by_actual_erc": {
+    "below_30": {
+      "n": 6572,
+      "r2": 0.37174500409831024,
+      "mae": 3.3933861914181374,
+      "rmse": 4.416289256693423,
+      "bias": 1.6304967178940961,
+      "p95_absolute_error": 9.002118499999995,
+      "observed_mean": 22.55401704199635,
+      "predicted_mean": 24.184513759890443
+    },
+    "30_to_59": {
+      "n": 24592,
+      "r2": 0.2682612723699124,
+      "mae": 5.238957902976577,
+      "rmse": 6.500489946628123,
+      "bias": 2.335283488532856,
+      "p95_absolute_error": 12.228126999999994,
+      "observed_mean": 41.24638093689005,
+      "predicted_mean": 43.5816644254229
+    },
+    "60_to_89": {
+      "n": 9484,
+      "r2": 0.5748819666082463,
+      "mae": 4.830649432728808,
+      "rmse": 5.991916704744961,
+      "bias": 4.051687524251371,
+      "p95_absolute_error": 11.885966500000004,
+      "observed_mean": 78.66364403205398,
+      "predicted_mean": 82.71533155630536
+    },
+    "90_plus": {
+      "n": 5444,
+      "r2": 0.14709863011904378,
+      "mae": 2.258658993387215,
+      "rmse": 3.0109417719261273,
+      "bias": -0.7307331227038942,
+      "p95_absolute_error": 6.444509999999994,
+      "observed_mean": 93.98695811903012,
+      "predicted_mean": 93.25622499632622
+    }
+  },
+  "notes": [
+    "One historical day only, 2025-07-09 unless overridden; not a forecast skill metric.",
+    "Comparing reconstructed gridMET ERC-G against gridMET ERC-G itself, not wildfire observations.",
+    "3km cell centers map to nearest source gridMET pixels; neighboring cells may share target values.",
+    "Many evaluated locations were not training sample cells; this is geographic extrapolation but not independent geographic-block validation.",
+    "Original 2025 test set has been inspected during model development; treat this as a diagnostic audit."
+  ],
+  "in_multiyear_sample": {
+    "n": 600,
+    "r2": 0.9462165474378895,
+    "mae": 4.533556916666666,
+    "rmse": 5.748803249543146,
+    "bias": 2.57295895,
+    "p95_absolute_error": 11.606459500000003,
+    "observed_mean": 54.71333333333333,
+    "predicted_mean": 57.28629228333334
+  },
+  "outside_multiyear_sample": {
+    "n": 45492,
+    "r2": 0.9430210522877207,
+    "mae": 4.539867920293679,
+    "rmse": 5.813297019856155,
+    "bias": 2.221252835003957,
+    "p95_absolute_error": 11.483900500000004,
+    "observed_mean": 52.48041413874967,
+    "predicted_mean": 54.701666973753625
+  },
+  "multiyear_sample_cell_count": 600
+}

@@ -1,0 +1,400 @@
+{
+  "experiment": "2024 ERC-G XGBoost random search",
+  "selection_data": "September 2024 validation only",
+  "test_set_used": false,
+  "features": [
+    "temp_max_c",
+    "rh_min_pct",
+    "wind_mean_ms",
+    "precip_mm",
+    "elevation_mean_m",
+    "lat",
+    "lon",
+    "day_sin",
+    "day_cos"
+  ],
+  "sizes": {
+    "train": 340136,
+    "validation": 41820
+  },
+  "original_v1_validation": {
+    "mae": 12.55919,
+    "rmse": 15.04038,
+    "bias": -11.73575,
+    "p95_abs_error": 26.83786,
+    "r2": 0.4657
+  },
+  "best_tuned": {
+    "trial": 8,
+    "params": {
+      "max_depth": 6,
+      "eta": 0.1,
+      "min_child_weight": 1,
+      "subsample": 0.85,
+      "colsample_bytree": 0.8,
+      "reg_lambda": 5.0,
+      "reg_alpha": 0.0
+    },
+    "best_iteration": 592,
+    "train": {
+      "mae": 1.70974,
+      "rmse": 2.25826,
+      "bias": 0.00098,
+      "p95_abs_error": 4.59567,
+      "r2": 0.99473
+    },
+    "validation": {
+      "mae": 10.66576,
+      "rmse": 13.08297,
+      "bias": -10.02397,
+      "p95_abs_error": 24.47617,
+      "r2": 0.59572
+    },
+    "duration_seconds": 11.8
+  },
+  "tuned_beats_v1_by_rmse": true,
+  "trials": [
+    {
+      "trial": 8,
+      "params": {
+        "max_depth": 6,
+        "eta": 0.1,
+        "min_child_weight": 1,
+        "subsample": 0.85,
+        "colsample_bytree": 0.8,
+        "reg_lambda": 5.0,
+        "reg_alpha": 0.0
+      },
+      "best_iteration": 592,
+      "train": {
+        "mae": 1.70974,
+        "rmse": 2.25826,
+        "bias": 0.00098,
+        "p95_abs_error": 4.59567,
+        "r2": 0.99473
+      },
+      "validation": {
+        "mae": 10.66576,
+        "rmse": 13.08297,
+        "bias": -10.02397,
+        "p95_abs_error": 24.47617,
+        "r2": 0.59572
+      },
+      "duration_seconds": 11.8
+    },
+    {
+      "trial": 10,
+      "params": {
+        "max_depth": 6,
+        "eta": 0.05,
+        "min_child_weight": 3,
+        "subsample": 1.0,
+        "colsample_bytree": 0.8,
+        "reg_lambda": 1.0,
+        "reg_alpha": 0.5
+      },
+      "best_iteration": 597,
+      "train": {
+        "mae": 2.12918,
+        "rmse": 2.81127,
+        "bias": 4e-05,
+        "p95_abs_error": 5.74905,
+        "r2": 0.99183
+      },
+      "validation": {
+        "mae": 12.32848,
+        "rmse": 14.86623,
+        "bias": -11.8554,
+        "p95_abs_error": 27.0219,
+        "r2": 0.478
+      },
+      "duration_seconds": 12.1
+    },
+    {
+      "trial": 7,
+      "params": {
+        "max_depth": 5,
+        "eta": 0.05,
+        "min_child_weight": 1,
+        "subsample": 1.0,
+        "colsample_bytree": 0.8,
+        "reg_lambda": 20.0,
+        "reg_alpha": 2.0
+      },
+      "best_iteration": 599,
+      "train": {
+        "mae": 2.5866,
+        "rmse": 3.40873,
+        "bias": 0.0002,
+        "p95_abs_error": 6.93734,
+        "r2": 0.98799
+      },
+      "validation": {
+        "mae": 12.749,
+        "rmse": 15.28635,
+        "bias": -12.12437,
+        "p95_abs_error": 27.31144,
+        "r2": 0.44808
+      },
+      "duration_seconds": 11.2
+    },
+    {
+      "trial": 5,
+      "params": {
+        "max_depth": 5,
+        "eta": 0.05,
+        "min_child_weight": 5,
+        "subsample": 0.7,
+        "colsample_bytree": 0.8,
+        "reg_lambda": 10.0,
+        "reg_alpha": 2.0
+      },
+      "best_iteration": 597,
+      "train": {
+        "mae": 2.57488,
+        "rmse": 3.39406,
+        "bias": 0.00153,
+        "p95_abs_error": 6.90892,
+        "r2": 0.9881
+      },
+      "validation": {
+        "mae": 12.92508,
+        "rmse": 15.42478,
+        "bias": -12.38506,
+        "p95_abs_error": 27.5848,
+        "r2": 0.43804
+      },
+      "duration_seconds": 11.4
+    },
+    {
+      "trial": 3,
+      "params": {
+        "max_depth": 5,
+        "eta": 0.1,
+        "min_child_weight": 5,
+        "subsample": 0.7,
+        "colsample_bytree": 1.0,
+        "reg_lambda": 5.0,
+        "reg_alpha": 0.5
+      },
+      "best_iteration": 594,
+      "train": {
+        "mae": 2.08534,
+        "rmse": 2.74112,
+        "bias": 0.00144,
+        "p95_abs_error": 5.59061,
+        "r2": 0.99223
+      },
+      "validation": {
+        "mae": 14.45631,
+        "rmse": 17.19705,
+        "bias": -14.19087,
+        "p95_abs_error": 31.89329,
+        "r2": 0.30149
+      },
+      "duration_seconds": 11.2
+    },
+    {
+      "trial": 1,
+      "params": {
+        "max_depth": 3,
+        "eta": 0.1,
+        "min_child_weight": 10,
+        "subsample": 0.85,
+        "colsample_bytree": 0.8,
+        "reg_lambda": 20.0,
+        "reg_alpha": 0.0
+      },
+      "best_iteration": 51,
+      "train": {
+        "mae": 5.17482,
+        "rmse": 6.71332,
+        "bias": -4e-05,
+        "p95_abs_error": 13.57255,
+        "r2": 0.95342
+      },
+      "validation": {
+        "mae": 14.88243,
+        "rmse": 17.3624,
+        "bias": -13.64792,
+        "p95_abs_error": 30.57593,
+        "r2": 0.28799
+      },
+      "duration_seconds": 1.7
+    },
+    {
+      "trial": 12,
+      "params": {
+        "max_depth": 3,
+        "eta": 0.075,
+        "min_child_weight": 10,
+        "subsample": 1.0,
+        "colsample_bytree": 0.8,
+        "reg_lambda": 1.0,
+        "reg_alpha": 2.0
+      },
+      "best_iteration": 73,
+      "train": {
+        "mae": 5.09837,
+        "rmse": 6.62005,
+        "bias": 3e-05,
+        "p95_abs_error": 13.34438,
+        "r2": 0.95471
+      },
+      "validation": {
+        "mae": 16.18279,
+        "rmse": 18.45319,
+        "bias": -15.33453,
+        "p95_abs_error": 31.67697,
+        "r2": 0.19572
+      },
+      "duration_seconds": 1.6
+    },
+    {
+      "trial": 4,
+      "params": {
+        "max_depth": 4,
+        "eta": 0.025,
+        "min_child_weight": 20,
+        "subsample": 1.0,
+        "colsample_bytree": 1.0,
+        "reg_lambda": 5.0,
+        "reg_alpha": 2.0
+      },
+      "best_iteration": 598,
+      "train": {
+        "mae": 3.61372,
+        "rmse": 4.71718,
+        "bias": 6e-05,
+        "p95_abs_error": 9.48178,
+        "r2": 0.977
+      },
+      "validation": {
+        "mae": 16.13251,
+        "rmse": 18.60576,
+        "bias": -15.69793,
+        "p95_abs_error": 32.0427,
+        "r2": 0.18237
+      },
+      "duration_seconds": 10.5
+    },
+    {
+      "trial": 2,
+      "params": {
+        "max_depth": 5,
+        "eta": 0.025,
+        "min_child_weight": 1,
+        "subsample": 0.85,
+        "colsample_bytree": 1.0,
+        "reg_lambda": 10.0,
+        "reg_alpha": 2.0
+      },
+      "best_iteration": 599,
+      "train": {
+        "mae": 3.07755,
+        "rmse": 4.04129,
+        "bias": 0.00091,
+        "p95_abs_error": 8.19709,
+        "r2": 0.98312
+      },
+      "validation": {
+        "mae": 16.24182,
+        "rmse": 18.78485,
+        "bias": -15.88542,
+        "p95_abs_error": 32.9185,
+        "r2": 0.16655
+      },
+      "duration_seconds": 11.8
+    },
+    {
+      "trial": 9,
+      "params": {
+        "max_depth": 5,
+        "eta": 0.025,
+        "min_child_weight": 10,
+        "subsample": 1.0,
+        "colsample_bytree": 1.0,
+        "reg_lambda": 10.0,
+        "reg_alpha": 0.5
+      },
+      "best_iteration": 599,
+      "train": {
+        "mae": 3.07345,
+        "rmse": 4.03464,
+        "bias": 0.00023,
+        "p95_abs_error": 8.19066,
+        "r2": 0.98318
+      },
+      "validation": {
+        "mae": 16.23246,
+        "rmse": 18.79629,
+        "bias": -15.86998,
+        "p95_abs_error": 32.96852,
+        "r2": 0.16553
+      },
+      "duration_seconds": 11.3
+    },
+    {
+      "trial": 6,
+      "params": {
+        "max_depth": 3,
+        "eta": 0.1,
+        "min_child_weight": 20,
+        "subsample": 0.7,
+        "colsample_bytree": 1.0,
+        "reg_lambda": 1.0,
+        "reg_alpha": 2.0
+      },
+      "best_iteration": 49,
+      "train": {
+        "mae": 5.15562,
+        "rmse": 6.69821,
+        "bias": -0.0009,
+        "p95_abs_error": 13.49973,
+        "r2": 0.95363
+      },
+      "validation": {
+        "mae": 16.85686,
+        "rmse": 19.08418,
+        "bias": -16.04398,
+        "p95_abs_error": 32.24517,
+        "r2": 0.13978
+      },
+      "duration_seconds": 1.2
+    },
+    {
+      "trial": 11,
+      "params": {
+        "max_depth": 6,
+        "eta": 0.025,
+        "min_child_weight": 5,
+        "subsample": 0.7,
+        "colsample_bytree": 1.0,
+        "reg_lambda": 5.0,
+        "reg_alpha": 0.0
+      },
+      "best_iteration": 599,
+      "train": {
+        "mae": 2.62574,
+        "rmse": 3.45708,
+        "bias": 0.00143,
+        "p95_abs_error": 7.04685,
+        "r2": 0.98765
+      },
+      "validation": {
+        "mae": 16.59786,
+        "rmse": 19.15566,
+        "bias": -16.28083,
+        "p95_abs_error": 33.39587,
+        "r2": 0.13332
+      },
+      "duration_seconds": 12.0
+    }
+  ],
+  "limitations": [
+    "2024 test was previously examined; use a fresh year for final unbiased evaluation.",
+    "Same-day observed weather surrogates ERC-G; this does not validate 7-day forecast performance.",
+    "Spatially correlated grid cells; geographically blocked and out-of-year tests remain necessary.",
+    "Hyperparameter tuning does not solve missing lagged fuel-moisture features."
+  ]
+}

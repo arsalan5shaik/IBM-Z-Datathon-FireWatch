@@ -1,0 +1,138 @@
+{
+  "model": "models/firewatch_erc_multiyear_v6/model.json",
+  "data": "data/processed/erc_weather_2025_lagged_multiyear.csv",
+  "source_period": "2025-07-01 through 2025-12-31",
+  "eligible_rows": 110400,
+  "sample_size": 1200,
+  "seed": 42,
+  "features": [
+    "temp_max_c",
+    "rh_min_pct",
+    "wind_mean_ms",
+    "precip_mm",
+    "elevation_mean_m",
+    "lat",
+    "lon",
+    "day_sin",
+    "day_cos",
+    "precip_7d_mm",
+    "precip_30d_mm",
+    "temp_mean_7d_c",
+    "rh_mean_7d_pct",
+    "dry_days_14d",
+    "wind_mean_7d_ms"
+  ],
+  "shap_additivity_max_absolute_error": 6.866455078125e-05,
+  "mean_predicted_erc": 56.02313232421875,
+  "mean_actual_erc": 56.215833333333336,
+  "examples": [
+    {
+      "date": "2025-12-26",
+      "cell_id": "CA3K_X-0082_Y+0110",
+      "actual_erc": 0.0,
+      "predicted_erc": 0.1372963935136795,
+      "base_value": 53.562705993652344,
+      "top_5_contributions": [
+        {
+          "feature": "rh_mean_7d_pct",
+          "shap_erc": -14.710769653320312,
+          "feature_value": 76.37142944335938
+        },
+        {
+          "feature": "rh_min_pct",
+          "shap_erc": -12.846264839172363,
+          "feature_value": 83.0
+        },
+        {
+          "feature": "precip_30d_mm",
+          "shap_erc": -11.438248634338379,
+          "feature_value": 512.2999877929688
+        },
+        {
+          "feature": "precip_mm",
+          "shap_erc": -7.422662258148193,
+          "feature_value": 52.0
+        },
+        {
+          "feature": "lon",
+          "shap_erc": -3.0302798748016357,
+          "feature_value": -122.90350341796875
+        }
+      ]
+    },
+    {
+      "date": "2025-08-15",
+      "cell_id": "CA3K_X-0108_Y+0134",
+      "actual_erc": 62.0,
+      "predicted_erc": 57.25436019897461,
+      "base_value": 53.562705993652344,
+      "top_5_contributions": [
+        {
+          "feature": "rh_min_pct",
+          "shap_erc": -9.127628326416016,
+          "feature_value": 42.20000076293945
+        },
+        {
+          "feature": "precip_30d_mm",
+          "shap_erc": 5.906745433807373,
+          "feature_value": 0.0
+        },
+        {
+          "feature": "day_cos",
+          "shap_erc": 3.0200421810150146,
+          "feature_value": -0.7280279994010925
+        },
+        {
+          "feature": "lon",
+          "shap_erc": -2.4768431186676025,
+          "feature_value": -123.86370849609375
+        },
+        {
+          "feature": "day_sin",
+          "shap_erc": 2.303633689880371,
+          "feature_value": -0.6855480074882507
+        }
+      ]
+    },
+    {
+      "date": "2025-07-09",
+      "cell_id": "CA3K_X+0095_Y-0064",
+      "actual_erc": 123.0,
+      "predicted_erc": 109.62751770019531,
+      "base_value": 53.562705993652344,
+      "top_5_contributions": [
+        {
+          "feature": "rh_mean_7d_pct",
+          "shap_erc": 18.157268524169922,
+          "feature_value": 4.27142858505249
+        },
+        {
+          "feature": "rh_min_pct",
+          "shap_erc": 15.35303020477295,
+          "feature_value": 2.5
+        },
+        {
+          "feature": "temp_mean_7d_c",
+          "shap_erc": 6.397622585296631,
+          "feature_value": 44.86428451538086
+        },
+        {
+          "feature": "precip_30d_mm",
+          "shap_erc": 6.065967559814453,
+          "feature_value": 0.0
+        },
+        {
+          "feature": "lon",
+          "shap_erc": 4.7466959953308105,
+          "feature_value": -116.80680847167969
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "Explains ERC-G regression, not wildfire ignition probability.",
+    "TreeSHAP attribution is not proof of causality.",
+    "Data is retrospective observed-weather evaluation, not 7-day forecast verification.",
+    "2025 H2 has previously been inspected; not a pristine holdout."
+  ]
+}

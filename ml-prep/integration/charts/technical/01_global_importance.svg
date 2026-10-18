@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 565" role="img" aria-label="Mean absolute SHAP feature importance">
+<rect width="980" height="565" fill="white"/>
+<text x="30" y="40" font-family="system-ui,Arial" font-size="22" text-anchor="start" fill="#16243b" font-weight="bold">Global feature importance | mean absolute SHAP</text>
+<text x="25" y="96" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">rh_mean_7d_pct</text>
+<rect x="288" y="81" width="540" height="19" rx="3" fill="#eaf0f6"/>
+<rect x="288" y="81" width="540.0" height="19" rx="3" fill="#e57531"/>
+<text x="843" y="96" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">9.042 ERC</text>
+<text x="25" y="126" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">rh_min_pct</text>
+<rect x="288" y="111" width="540" height="19" rx="3" fill="#eaf0f6"/>
+<rect x="288" y="111" width="438.9" height="19" rx="3" fill="#e57531"/>
+<text x="843" y="126" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">7.349 ERC</text>
+<text x="25" y="156" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">precip_30d_mm</text>
+<rect x="288" y="141" width="540" height="19" rx="3" fill="#eaf0f6"/>
+<rect x="288" y="141" width="284.3" height="19" rx="3" fill="#e57531"/>
+<text x="843" y="156" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">4.760 ERC</text>
+<text x="25" y="186" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">lon</text>
+<rect x="288" y="171" width="540" height="19" rx="3" fill="#eaf0f6"/>
+<rect x="288" y="171" width="182.3" height="19" rx="3" fill="#e57531"/>
+<text x="843" y="186" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">3.053 ERC</text>
+<text x="25" y="216" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">precip_mm</text>
+<rect x="288" y="201" width="540" height="19" rx="3" fill="#eaf0f6"/>
+<rect x="288" y="201" width="166.9" height="19" rx="3" fill="#e57531"/>
+<text x="843" y="216" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">2.795 ERC</text>
+<text x="25" y="246" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">day_cos</text>
+<rect x="288" y="231" width="540" height="19" rx="3" fill="#eaf0f6"/>
+<rect x="288" y="231" width="109.6" height="19" rx="3" fill="#e57531"/>
+<text x="843" y="246" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">1.835 ERC</text>
+<text x="25" y="276" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">day_sin</text>
+<rect x="288" y="261" width="540" height="19" rx="3" fill="#eaf0f6"/>
+<rect x="288" y="261" width="102.1" height="19" rx="3" fill="#e57531"/>
+<text x="843" y="276" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">1.710 ERC</text>
+<text x="25" y="306" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">elevation_mean_m</text>
+<rect x="288" y="291" width="540" height="19" rx="3" fill="#eaf0f6"/>
+<rect x="288" y="291" width="90.2" height="19" rx="3" fill="#e57531"/>
+<text x="843" y="306" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">1.510 ERC</text>
+<text x="25" y="336" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">temp_mean_7d_c</text>
+<rect x="288" y="321" width="540" height="19" rx="3" fill="#eaf0f6"/>
+<rect x="288" y="321" width="66.1" height="19" rx="3" fill="#e57531"/>
+<text x="843" y="336" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">1.107 ERC</text>
+<text x="25" y="366" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">lat</text>
+<rect x="288" y="351" width="540" height="19" rx="3" fill="#eaf0f6"/>
+<rect x="288" y="351" width="31.2" height="19" rx="3" fill="#e57531"/>
+<text x="843" y="366" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">0.522 ERC</text>
+<text x="25" y="396" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">dry_days_14d</text>
+<rect x="288" y="381" width="540" height="19" rx="3" fill="#eaf0f6"/>
+<rect x="288" y="381" width="22.6" height="19" rx="3" fill="#e57531"/>
+<text x="843" y="396" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">0.378 ERC</text>
+<text x="25" y="426" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">temp_max_c</text>
+<rect x="288" y="411" width="540" height="19" rx="3" fill="#eaf0f6"/>
+<rect x="288" y="411" width="13.9" height="19" rx="3" fill="#e57531"/>
+<text x="843" y="426" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">0.232 ERC</text>
+<text x="25" y="456" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">precip_7d_mm</text>
+<rect x="288" y="441" width="540" height="19" rx="3" fill="#eaf0f6"/>
+<rect x="288" y="441" width="6.3" height="19" rx="3" fill="#e57531"/>
+<text x="843" y="456" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">0.105 ERC</text>
+<text x="25" y="486" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">wind_mean_ms</text>
+<rect x="288" y="471" width="540" height="19" rx="3" fill="#eaf0f6"/>
+<rect x="288" y="471" width="0.0" height="19" rx="3" fill="#e57531"/>
+<text x="843" y="486" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">0.000 ERC</text>
+<text x="25" y="516" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">wind_mean_7d_ms</text>
+<rect x="288" y="501" width="540" height="19" rx="3" fill="#eaf0f6"/>
+<rect x="288" y="501" width="0.0" height="19" rx="3" fill="#e57531"/>
+<text x="843" y="516" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">0.000 ERC</text>
+<text x="25" y="550" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#526174" font-weight="normal">Magnitude is not directional and does not establish causation.</text>
+</svg>

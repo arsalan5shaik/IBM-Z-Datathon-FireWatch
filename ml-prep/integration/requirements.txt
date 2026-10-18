@@ -1,0 +1,6 @@
+# LinuxONE IBM s390x: use already built native XGBoost, not a generic pip binary wheel.
+numpy
+xgboost==2.1.4
+# For historical statewide gridMET NetCDF extraction only:
+h5netcdf
+pyfive

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 440" role="img" aria-label="Prediction errors by actual ERC range">
+<rect width="900" height="440" fill="white"/>
+<text x="30" y="36" font-family="system-ui,Arial" font-size="21" text-anchor="start" fill="#16243b" font-weight="bold">Mean prediction bias by observed ERC range</text>
+<line x1="460.0" y1="70.0" x2="460.0" y2="350.0" stroke="#748395" stroke-width="1.5"/>
+<text x="27" y="110" font-family="system-ui,Arial" font-size="14" text-anchor="start" fill="#16243b" font-weight="normal">ERC &lt; 30 (n=329)</text>
+<rect x="460.0" y="90" width="205.4" height="31" rx="4" fill="#e57531"/>
+<text x="673.4203189117623" y="110" font-family="system-ui,Arial" font-size="13" text-anchor="start" fill="#e57531" font-weight="normal">+3.37</text>
+<text x="27" y="176" font-family="system-ui,Arial" font-size="14" text-anchor="start" fill="#16243b" font-weight="normal">30–59 (n=658)</text>
+<rect x="460.0" y="156" width="139.1" height="31" rx="4" fill="#e57531"/>
+<text x="607.1465967880697" y="176" font-family="system-ui,Arial" font-size="13" text-anchor="start" fill="#e57531" font-weight="normal">+2.28</text>
+<text x="27" y="242" font-family="system-ui,Arial" font-size="14" text-anchor="start" fill="#16243b" font-weight="normal">60–89 (n=608)</text>
+<rect x="327.5" y="222" width="132.5" height="31" rx="4" fill="#3574bb"/>
+<text x="319.5335688785741" y="242" font-family="system-ui,Arial" font-size="13" text-anchor="end" fill="#3574bb" font-weight="normal">-2.17</text>
+<text x="27" y="308" font-family="system-ui,Arial" font-size="14" text-anchor="start" fill="#16243b" font-weight="normal">ERC ≥ 90 (n=205)</text>
+<rect x="160.0" y="288" width="300.0" height="31" rx="4" fill="#3574bb"/>
+<text x="152.0" y="308" font-family="system-ui,Arial" font-size="13" text-anchor="end" fill="#3574bb" font-weight="normal">-4.92</text>
+<text x="450" y="410" font-family="system-ui,Arial" font-size="12" text-anchor="middle" fill="#536478" font-weight="normal">Negative = underprediction • Positive = overprediction</text>
+</svg>

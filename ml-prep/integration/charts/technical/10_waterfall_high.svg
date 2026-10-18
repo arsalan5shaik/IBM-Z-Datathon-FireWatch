@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1010 530" role="img" aria-label="High ERC prediction | SHAP waterfall">
+<rect width="1010" height="530" fill="white"/>
+<text x="25" y="36" font-family="system-ui,Arial" font-size="21" text-anchor="start" fill="#16243b" font-weight="bold">High ERC prediction | SHAP waterfall</text>
+<text x="25" y="59" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#546478" font-weight="normal">2025-08-02 • CA3K_X+0145_Y-0130 • model=110.53 • observed=113.00 • baseline=53.56</text>
+<line x1="280.0" y1="80.0" x2="280.0" y2="478.0" stroke="#eff2f5" stroke-width="1"/>
+<text x="280.0" y="497" font-family="system-ui,Arial" font-size="11" text-anchor="middle" fill="#586779" font-weight="normal">47</text>
+<line x1="396.0" y1="80.0" x2="396.0" y2="478.0" stroke="#eff2f5" stroke-width="1"/>
+<text x="396.0" y="497" font-family="system-ui,Arial" font-size="11" text-anchor="middle" fill="#586779" font-weight="normal">59</text>
+<line x1="512.0" y1="80.0" x2="512.0" y2="478.0" stroke="#eff2f5" stroke-width="1"/>
+<text x="512.0" y="497" font-family="system-ui,Arial" font-size="11" text-anchor="middle" fill="#586779" font-weight="normal">71</text>
+<line x1="628.0" y1="80.0" x2="628.0" y2="478.0" stroke="#eff2f5" stroke-width="1"/>
+<text x="628.0" y="497" font-family="system-ui,Arial" font-size="11" text-anchor="middle" fill="#586779" font-weight="normal">83</text>
+<line x1="744.0" y1="80.0" x2="744.0" y2="478.0" stroke="#eff2f5" stroke-width="1"/>
+<text x="744.0" y="497" font-family="system-ui,Arial" font-size="11" text-anchor="middle" fill="#586779" font-weight="normal">96</text>
+<line x1="860.0" y1="80.0" x2="860.0" y2="478.0" stroke="#eff2f5" stroke-width="1"/>
+<text x="860.0" y="497" font-family="system-ui,Arial" font-size="11" text-anchor="middle" fill="#586779" font-weight="normal">108</text>
+<line x1="976.0" y1="80.0" x2="976.0" y2="478.0" stroke="#eff2f5" stroke-width="1"/>
+<text x="976.0" y="497" font-family="system-ui,Arial" font-size="11" text-anchor="middle" fill="#586779" font-weight="normal">120</text>
+<text x="20" y="103" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">rh_mean_7d_pct</text>
+<rect x="346.34" y="88" width="168.70" height="19" rx="2" fill="#e57531"/>
+<text x="955" y="103" font-family="system-ui,Arial" font-size="11" text-anchor="end" fill="#e57531" font-weight="normal">+17.80</text>
+<text x="20" y="136" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">rh_min_pct</text>
+<rect x="515.05" y="121" width="141.16" height="19" rx="2" fill="#e57531"/>
+<text x="955" y="136" font-family="system-ui,Arial" font-size="11" text-anchor="end" fill="#e57531" font-weight="normal">+14.89</text>
+<text x="20" y="169" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">precip_30d_mm</text>
+<rect x="656.21" y="154" width="58.01" height="19" rx="2" fill="#e57531"/>
+<text x="955" y="169" font-family="system-ui,Arial" font-size="11" text-anchor="end" fill="#e57531" font-weight="normal">+6.12</text>
+<text x="20" y="202" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">lon</text>
+<rect x="714.21" y="187" width="56.94" height="19" rx="2" fill="#e57531"/>
+<text x="955" y="202" font-family="system-ui,Arial" font-size="11" text-anchor="end" fill="#e57531" font-weight="normal">+6.01</text>
+<text x="20" y="235" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">temp_mean_7d_c</text>
+<rect x="771.15" y="220" width="43.12" height="19" rx="2" fill="#e57531"/>
+<text x="955" y="235" font-family="system-ui,Arial" font-size="11" text-anchor="end" fill="#e57531" font-weight="normal">+4.55</text>
+<text x="20" y="268" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">day_cos</text>
+<rect x="814.27" y="253" width="24.26" height="19" rx="2" fill="#e57531"/>
+<text x="955" y="268" font-family="system-ui,Arial" font-size="11" text-anchor="end" fill="#e57531" font-weight="normal">+2.56</text>
+<text x="20" y="301" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">day_sin</text>
+<rect x="838.53" y="286" width="18.23" height="19" rx="2" fill="#e57531"/>
+<text x="955" y="301" font-family="system-ui,Arial" font-size="11" text-anchor="end" fill="#e57531" font-weight="normal">+1.92</text>
+<text x="20" y="334" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">precip_mm</text>
+<rect x="856.76" y="319" width="15.00" height="19" rx="2" fill="#e57531"/>
+<text x="955" y="334" font-family="system-ui,Arial" font-size="11" text-anchor="end" fill="#e57531" font-weight="normal">+1.58</text>
+<text x="20" y="367" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">temp_max_c</text>
+<rect x="871.76" y="352" width="7.63" height="19" rx="2" fill="#e57531"/>
+<text x="955" y="367" font-family="system-ui,Arial" font-size="11" text-anchor="end" fill="#e57531" font-weight="normal">+0.80</text>
+<text x="20" y="400" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">lat</text>
+<rect x="879.38" y="385" width="3.08" height="19" rx="2" fill="#e57531"/>
+<text x="955" y="400" font-family="system-ui,Arial" font-size="11" text-anchor="end" fill="#e57531" font-weight="normal">+0.32</text>
+<text x="20" y="433" font-family="system-ui,Arial" font-size="12" text-anchor="start" fill="#16243b" font-weight="normal">Other 5 features</text>
+<rect x="882.46" y="418" width="3.78" height="19" rx="2" fill="#e57531"/>
+<text x="955" y="433" font-family="system-ui,Arial" font-size="11" text-anchor="end" fill="#e57531" font-weight="normal">+0.40</text>
+<text x="30" y="477" font-family="system-ui,Arial" font-size="11" text-anchor="start" fill="#57677a" font-weight="normal">Orange raises ERC; blue lowers ERC. Bars start from cumulative prior contributions.</text>
+</svg>

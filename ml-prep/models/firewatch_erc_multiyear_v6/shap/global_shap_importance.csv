@@ -1,0 +1,16 @@
+feature,mean_abs_shap_erc,mean_signed_shap_erc
+rh_mean_7d_pct,9.297249,-0.142141
+rh_min_pct,7.606541,-0.345172
+precip_30d_mm,4.818544,0.623547
+lon,3.032608,-0.053140
+precip_mm,2.828944,0.329045
+day_cos,1.807569,-0.017800
+day_sin,1.738423,1.738351
+elevation_mean_m,1.529917,-0.008233
+temp_mean_7d_c,1.107099,0.130030
+lat,0.497857,0.017154
+dry_days_14d,0.377926,0.141868
+temp_max_c,0.233890,0.017606
+precip_7d_mm,0.106342,0.029311
+wind_mean_ms,0.000000,0.000000
+wind_mean_7d_ms,0.000000,0.000000
