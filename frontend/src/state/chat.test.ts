@@ -145,6 +145,7 @@ describe('FireWatch backend assistant', () => {
 });
 
 it('initial suggestions do not assume an unavailable elevated prediction', () => {
+  vi.spyOn(React, 'useSyncExternalStore').mockImplementation((_subscribe, snapshot) => snapshot());
   setState({ chatOpen: true });
   const html = renderToStaticMarkup(createElement(ChatDrawer));
   expect(html).toContain('Are wildfire predictions and explanations available?');

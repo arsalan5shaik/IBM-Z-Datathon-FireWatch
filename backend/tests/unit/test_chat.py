@@ -17,7 +17,7 @@ from app.config import Settings
 from app.errors import APIError
 from app.main import create_app
 from app.prompts.firewatch_system import FIREWATCH_SYSTEM_PROMPT
-from app.schemas.chat import ChatRequest
+from app.schemas.chat import ChatRequest, FinalAnswer
 from app.services.chat_access import ChatLimits
 from app.services.chat_research import research, verified_url
 from app.services.chat_service import ChatService
@@ -277,7 +277,7 @@ def test_invalid_tool_calls(setup, name, args, code):
 def test_bounded_tool_loop(setup):
     instance, _, _ = service(setup, *[call("get_shap") for _ in range(12)])
     with pytest.raises(APIError) as error:
-        run(instance.answer(request("Explain SHAP wildfire risk")))
+        run(instance.answer(request("Weather in Stockton")))
     assert error.value.code == "chat_tool_limit"
 
 
@@ -367,8 +367,15 @@ def test_ungrounded_output_and_secret_rejection(setup, text, ids, code):
 )
 def test_unavailable_data_cannot_be_fabricated(setup, message, text):
     instance, _, _ = service(setup, final(text))
+    tools = ChatTools(setup[0].state, instance.client, request(message), NOW)
+    name = (
+        "get_shap" if "SHAP" in message else "get_risk" if "risk" in message else "get_detections"
+    )
+    run(tools.execute(name, "{}"))
     with pytest.raises(APIError) as error:
-        run(instance.answer(request(message)))
+        instance.finalize(
+            FinalAnswer.model_validate_json(final(text).output_text), tools, request(message)
+        )
     assert error.value.code == "chat_fact_unverified"
 
 
@@ -777,6 +784,8 @@ def test_live_detection_transport_separates_acquisition_and_fetch_times(setup):
     assert evidence["matched_count"] == 1
     assert evidence["detections"][0]["coordinates"] == [-121.5, 38.5]
     assert evidence["detections"][0]["frp_mw"] == 12.4
+    assert evidence["detections"][0]["confidence"] == "n"
+    assert evidence["detections"][0]["confidence_label"] == "nominal"
     assert "features" not in evidence and "metadata" not in evidence
     assert response.sources[0].valid_at == iso(acquired)
     assert response.sources[0].fetched_at == iso(NOW)
@@ -870,7 +879,7 @@ def test_missing_model_reply_can_reference_verified_horizon_and_numbered_steps(s
     assert "168-hour" in result.answer
 
 
-def test_model_only_unavailable_answer_uses_one_model_response_no_extra_tools(setup):
+def test_model_only_unavailable_answer_uses_no_model_response_or_extra_tools(setup):
     instance, client, provider = service(
         setup,
         final(
@@ -882,9 +891,8 @@ def test_model_only_unavailable_answer_uses_one_model_response_no_extra_tools(se
         instance.answer(request("Why does FireWatch predict elevated wildfire risk here?"))
     )
     assert result.tools_used == ["get_risk", "get_shap"]
-    assert len(client.calls) == 1 and client.calls[0]["tools"] == []
+    assert client.calls == [] and result.mode == "data_unavailable" and result.model is None
     assert provider.calls == 0
-    assert "speculate" in client.calls[0]["instructions"]
 
 
 def test_completed_preflight_tool_is_not_offered_again(setup):
@@ -1069,3 +1077,53 @@ def test_conditional_evacuation_advice_is_not_current_order_check(setup):
     )
     assert "leave promptly" in result.answer
     assert "cannot verify current evacuation orders" not in result.answer
+
+
+def test_cited_server_retrieval_time_is_evidence_not_a_model_invention(setup):
+    app, _ = setup
+    instance = ChatService(
+        app.state,
+        MockResponses(final("retrieved_at 2026-10-17T12:00:45Z. Temperature is 20 C. [fw-1]")),
+        lambda: NOW + timedelta(seconds=45),
+    )
+    result = run(instance.answer(request()))
+    assert result.sources[0].retrieved_at == "2026-10-17T12:00:45Z"
+
+
+def test_forecast_time_cannot_be_relabelled_as_retrieval_time(setup):
+    app, _ = setup
+    instance = ChatService(
+        app.state,
+        MockResponses(final("retrieved_at 2026-10-17T12:00:00Z. [fw-1]")),
+        lambda: NOW + timedelta(seconds=45),
+    )
+    with pytest.raises(APIError) as error:
+        run(instance.answer(request()))
+    assert error.value.code == "chat_fact_unverified"
+
+
+def test_transient_sdk_failure_recovers_on_only_allowed_retry(setup):
+    attempts = []
+
+    async def handler(req):
+        attempts.append(1)
+        if len(attempts) == 1:
+            return httpx.Response(
+                503, headers={"retry-after-ms": "1"}, json={"error": {"message": "fixture"}}
+            )
+        return httpx.Response(200, json=final().model_dump(mode="json"))
+
+    async def scenario():
+        wrapper = ResponsesClient(setup[0].state.settings)
+        wrapper.client = openai.AsyncOpenAI(
+            api_key="fixture",
+            max_retries=1,
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        )
+        try:
+            assert (await wrapper.create(input="California wildfire")).status == "completed"
+        finally:
+            await wrapper.close()
+
+    run(scenario())
+    assert len(attempts) == 2

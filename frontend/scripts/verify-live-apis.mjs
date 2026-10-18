@@ -9,7 +9,11 @@ assert.equal(process.env.FIREWATCH_RUN_PAID_VERIFICATION, '1', 'Explicit paid-te
 const api = process.env.FIREWATCH_VERIFY_API ?? 'http://127.0.0.1:8007/api/v1';
 assert.equal(new URL(api).hostname, '127.0.0.1', 'Local verification only');
 const ui = process.env.FIREWATCH_VERIFY_UI ?? 'http://127.0.0.1:5178/';
-const output = path.join(os.tmpdir(), 'firewatch-live-api-results');
+const session = process.env.FIREWATCH_VERIFY_SESSION ?? 'firewatch-live-api-results';
+assert.equal(path.basename(session), session);
+assert.ok(session.startsWith('firewatch-'));
+const output = path.join(os.tmpdir(), session);
+const acceptance = process.env.FIREWATCH_VERIFY_CHAT_ACCEPTANCE === '1';
 await fs.mkdir(output, { recursive: true });
 const browser = await chromium.launch({ channel: 'chrome', headless: true,
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -44,16 +48,17 @@ async function select(query, id) {
   await page.getByRole('option').filter({ hasText: query }).first().click();
   await waitState(s => s.location === id);
 }
-async function ask(message) {
+async function ask(message, model = 'gpt-5-mini') {
   const count = (await state()).messages.length;
   await page.getByRole('textbox', { name: 'Message FireWatch AI' }).fill(message);
+  const response = page.waitForResponse(r => r.url() === `${api}/chat`);
   await page.getByRole('textbox', { name: 'Message FireWatch AI' }).press('Enter');
-  await waitState(s => s.pending);
+  await response;
   const s = await waitState(s => !s.pending && s.messages.length >= count + 2);
   const answer = s.messages.at(-1);
   result.answers.push({ prompt: message, answer });
   assert.equal(answer.mode, 'api');
-  assert.equal(answer.model, 'gpt-5-mini');
+  assert.equal(answer.model, model);
   return answer;
 }
 try {
@@ -75,11 +80,18 @@ try {
   // Open before selecting a location to avoid the panel's auto-submitting contextual action.
   await page.getByRole('button', { name: 'Ask FireWatch AI', exact: true }).click();
   await select('Stockton', 'place-ca-stockton');
-  const weather = await ask("What's the current weather in Stockton, California?");
-  assert.ok(weather.sources.some(s => s.provider === 'Open-Meteo' && s.scope.includes('Stockton')));
+  const weather = await ask(acceptance
+    ? 'Why does FireWatch predict elevated wildfire risk for this location?'
+    : "What's the current weather in Stockton, California?", acceptance ? null : 'gpt-5-mini');
+  assert.ok(weather.sources.some(s => s.provider === (acceptance ? 'FireWatch' : 'Open-Meteo') && s.scope.includes('Stockton')));
+  if (acceptance) {
+    assert.match(weather.content, /predictions are unavailable/);
+    assert.match(weather.content, /SHAP explanations are also unavailable/);
+    assert.ok(weather.suggested_questions.every(q => !/refresh|radius|imagery|SHAP/i.test(q)));
+  }
   assert.equal(result.requests.at(-1).location_id, 'place-ca-stockton');
   await page.screenshot({ path: path.join(output, 'real-chat-stockton.png') });
-  result.steps.push({ check: 'Real OpenAI + real Stockton weather, loading and sources', status: 'PASS' });
+  result.steps.push({ check: acceptance ? 'Validated unavailable Stockton ML/SHAP, safe suggestions, no OpenAI generation' : 'Real OpenAI + real Stockton weather, loading and sources', status: 'PASS' });
   await select('Sacramento', 'place-ca-sacramento');
   const detections = await ask('What are the latest fire detections near Sacramento?');
   assert.ok(detections.sources.some(s => s.provider === 'NASA FIRMS' && s.scope.includes('Sacramento')));

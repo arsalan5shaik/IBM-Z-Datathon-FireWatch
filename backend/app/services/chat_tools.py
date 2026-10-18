@@ -328,6 +328,9 @@ class ChatTools:
                         "detections": [
                             {
                                 "coordinates": feature.geometry["coordinates"],
+                                "confidence_label": {"l": "low", "n": "nominal", "h": "high"}.get(
+                                    feature.properties["confidence"], "unknown"
+                                ),
                                 **{
                                     key: feature.properties[key]
                                     for key in (

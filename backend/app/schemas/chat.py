@@ -81,7 +81,7 @@ class ChatResponse(StrictModel):
     suggested_questions: list[str] = Field(default_factory=list, max_length=4)
     grounding: list[dict] = Field(default_factory=list)
     model: str | None = None
-    mode: Literal["openai", "scope_refusal", "clarification"] = "openai"
+    mode: Literal["openai", "scope_refusal", "clarification", "data_unavailable"] = "openai"
 
 
 class ToolArgs(StrictModel):
