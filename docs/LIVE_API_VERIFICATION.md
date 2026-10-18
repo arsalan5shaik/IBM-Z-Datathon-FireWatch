@@ -4,7 +4,7 @@ Verified 2026-10-18 UTC, locally on Windows/Python 3.11.17 and Chrome.
 Base: main `a409571`; branch: `JS_feat/live-api-verification`.
 No Dockerfiles, deployment infrastructure, ML artifacts or teammate branches were changed.
 
-## Chatbot acceptance follow-up ? 2026-10-18 UTC
+## Chatbot acceptance follow-up - 2026-10-18 UTC
 
 **Live-demo acceptance: BLOCKED. PR #12 remains open; do not merge.**
 The missing-prediction timeout path is fixed and verified. General research is
@@ -17,7 +17,7 @@ The original run below is retained as history, not the current test total.
 
 | Requirement | Result | Evidence and remaining work |
 |---|---|---|
-| Elevated-risk explanation timeout | PASS for unavailable artifacts | Risk and SHAP reads each 0?3 ms. Final HTTP tests returned 200 with `mode=data_unavailable`, `model=null`, registered availability sources and no OpenAI request. Warm seven-day/SHAP requests: 0.089/0.094 s; first request after restart: 1.345 s. |
+| Elevated-risk explanation timeout | PASS for unavailable artifacts | Risk and SHAP reads each 0-3 ms. Final HTTP tests returned 200 with `mode=data_unavailable`, `model=null`, registered availability sources and no OpenAI request. Warm seven-day/SHAP requests: 0.089/0.094 s; first request after restart: 1.345 s. |
 | Repeated/unnecessary calls | PASS for tested paths | Missing-model questions stop after their validated reads. Completed preflight tools are no longer offered again. No inference, weather or research fills missing model output. |
 | Retry/deadline bounds | PASS automated | Real SDK over mocked HTTP: 503/429/timeout get at most two attempts, 401 gets one; transient 503 recovers on the only retry. Wall-clock timeout cancels model work. Existing disconnect, lease, tool-loop and quota guards remain tested. |
 | Unsupported follow-up suggestions | PASS | Server-owned weather, wind and cached bbox-detection questions only. Tests reject promises of FIRMS refresh, radius queries, imagery and SHAP execution in answer text. Chrome rendered the supported suggestions. Initial UI questions no longer assume elevated risk. |
@@ -28,7 +28,7 @@ The original run below is retained as history, not the current test total.
 | FRP explanation | BLOCKED live | Real Sacramento output preserved the actual 20.75 MW value; the requested general FRP-definition question could not be live-retested within the conservative search allowance. Routing-to-research tests pass, which is not a live factual verification. |
 | Wind-spread science | BLOCKED live | Research routing is tested; no new paid science answer was executed after the search stop. |
 | Satellite hotspot vs confirmed incident | PASS in real detection answer; general comparison BLOCKED | Chrome's actual Sacramento answer explicitly identified a thermal hotspot, not a confirmed incident, and disclosed stale cache. A standalone general-science comparison remains unexecuted. |
-| VIIRS confidence wording | FAIL observed; corrected transport PASS automated, final wording BLOCKED live | The real model called code `n` ?low/nominal.? Compact evidence now includes `confidence_label=nominal` and explicit l/n/h instructions; the real-code transport test checks nominal. No paid retest of the wording was performed. |
+| VIIRS confidence wording | FAIL observed; corrected transport PASS automated, final wording BLOCKED live | The real model called code `n` "low/nominal." Compact evidence now includes `confidence_label=nominal` and explicit l/n/h instructions; the real-code transport test checks nominal. No paid retest of the wording was performed. |
 | Unavailable real ML predictions / SHAP | PASS handling; actual inference BLOCKED | Elevated-risk, seven-day and SHAP HTTP tests return explicit unavailability with real location/time and no scores/attributions. No fixtures, model execution or generated SHAP substitute was used. |
 | Full backend regression | PASS | 385 tests, no failures/skips; see commands below. |
 | Frontend regression | PASS | 63 tests / 10 files, TypeScript and production build pass. |
@@ -61,7 +61,7 @@ settings). The entire chat still has its separate 90 s deadline. No application
 retry loop was added. Safe logs contain only tool names, stage and elapsed time;
 no prompt, conversation, provider URL, key or tool arguments are logged.
 
-### Measured usage and estimated cost ? additional allowance only
+### Measured usage and estimated cost - additional allowance only
 
 - Authorized maximum: 20 additional paid OpenAI attempts, four hosted searches.
 - Actual: 13 chat HTTP submissions; 11 SDK operations; **12 OpenAI HTTP attempts**
@@ -133,7 +133,7 @@ Neither was suppressed and no dependencies were changed.
 
 Existing branch `JS_feat/live-api-verification`, existing PR
 https://github.com/arsalan5shaik/IBM-Z-Datathon-FireWatch/pull/12.
-Implementation commits: `9d475d4` and `fcefe92`; final report commit follows.
+Implementation commits: `9d475d4` and `fcefe92`; report commit `8d971b3`.
 Both implementation commits were pushed and remote branch existence verified.
 Final CI status is recorded in the final response after checks complete.
 The PR must stay open: budget-blocked science/research acceptance and variable
