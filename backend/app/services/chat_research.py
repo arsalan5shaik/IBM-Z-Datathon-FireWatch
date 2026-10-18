@@ -79,7 +79,9 @@ async def research(client, query, now, emergency=False):
     )
     items = output_items(response)
     calls = [item for item in items if item["type"] == "web_search_call"]
-    if not calls or len(calls) != 1 or calls[0].get("status") != "completed":
+    # A reasoning search can emit search/open/find actions in one retrieval.
+    # max_tool_calls is requested but is not an exact output-item count.
+    if not calls or any(call.get("status") != "completed" for call in calls):
         raise APIError(
             "research_unavailable", "No completed online research retrieval is available", 503
         )

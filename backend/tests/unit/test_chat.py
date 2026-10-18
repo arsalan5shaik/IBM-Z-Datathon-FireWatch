@@ -757,3 +757,114 @@ def test_conflicting_research_sources_are_preserved_not_collapsed():
     )
     assert {source["url"] for source in result["sources"]} == {SOURCE_URL, other}
     assert "disagree" in result["summary"]
+
+
+def test_live_detection_transport_separates_acquisition_and_fetch_times(setup):
+    from tests.integration.test_fires import Provider, observation
+
+    app, _ = setup
+    acquired = NOW - timedelta(hours=1)
+    run(app.state.fires.refresh(now=NOW, client=Provider([observation(acquired_at=acquired)])))
+    instance, client, _ = service(setup, final("Satellite observations retrieved. [fw-1]"))
+    response = run(
+        instance.answer(ChatRequest(message="Recent satellite detections", selected_hour=NOW))
+    )
+    evidence = json.loads(client.calls[0]["input"][0]["content"])["server_context"][
+        "actual_firewatch_results"
+    ][0]
+    assert evidence["observation_end"] == iso(acquired)
+    assert evidence["fetched_at"] == iso(NOW)
+    assert evidence["matched_count"] == 1
+    assert evidence["detections"][0]["coordinates"] == [-121.5, 38.5]
+    assert evidence["detections"][0]["frp_mw"] == 12.4
+    assert "features" not in evidence and "metadata" not in evidence
+    assert response.sources[0].valid_at == iso(acquired)
+    assert response.sources[0].fetched_at == iso(NOW)
+
+
+def test_fetch_timestamp_cannot_be_labeled_observation_end(setup):
+    from tests.integration.test_fires import Provider, observation
+
+    app, _ = setup
+    run(
+        app.state.fires.refresh(
+            now=NOW, client=Provider([observation(acquired_at=NOW - timedelta(hours=1))])
+        )
+    )
+    instance, _, _ = service(setup, final(f"observation_end {iso(NOW)}. [fw-1]"))
+    with pytest.raises(APIError) as error:
+        run(instance.answer(ChatRequest(message="Recent satellite detections", selected_hour=NOW)))
+    assert error.value.code == "chat_fact_unverified"
+
+
+def test_preparedness_research_preserves_guidance_without_claiming_current_orders(setup):
+    instance, _, _ = service(
+        setup,
+        model_response("CAL FIRE preparation guidance.", web=True),
+        final(
+            "Prepare a go bag and follow official evacuation instructions. [research-1-web-1]",
+            ["research-1-web-1"],
+        ),
+    )
+    result = run(
+        instance.answer(request("What does CAL FIRE recommend for evacuation preparation?"))
+    )
+    assert "Prepare a go bag" in result.answer
+    assert result.sources[0].published_at is None
+    assert SOURCE_URL in result.answer
+
+
+def test_detection_time_range_never_implies_other_locations_observations(setup):
+    from tests.integration.test_fires import Provider, observation
+
+    app, _ = setup
+    run(app.state.fires.refresh(now=NOW, client=Provider([observation()])))
+    tools = ChatTools(app.state, MockResponses(), request("Satellite detections in Stockton"), NOW)
+    result = run(tools.execute("get_detections", "{}"))
+    assert result["matched_count"] == 0
+    assert result["observation_start"] is None and result["observation_end"] is None
+    assert tools.sources["fw-1"].valid_at is None
+
+
+def test_research_accepts_completed_search_and_open_actions_with_verified_citations():
+    response = model_response("Official incident information.", web=True)
+    payload = response.output[0].model_dump(mode="json")
+    payload.update(id="ws_open", action={"type": "open_page", "url": SOURCE_URL})
+    response.output.insert(1, type(response.output[0]).model_validate(payload))
+    result = run(research(MockResponses(response), "Official California fire updates", NOW))
+    assert result["sources"][0]["url"] == SOURCE_URL
+
+
+def test_verified_fahrenheit_conversion_is_not_rejected_as_invented_weather(setup):
+    instance, _, _ = service(setup, final("Temperature is 20 C (68 F). [fw-1]"))
+    result = run(instance.answer(request()))
+    assert "68 F" in result.answer
+
+
+def test_empty_detections_can_state_the_actual_24_hour_lookback(setup):
+    from tests.integration.test_fires import Provider
+
+    app, _ = setup
+    run(app.state.fires.refresh(now=NOW, client=Provider([])))
+    instance, _, _ = service(
+        setup,
+        final(
+            "No satellite detections returned in the last 24 hours; "
+            "this does not prove no wildfire exists. [fw-1]"
+        ),
+    )
+    result = run(instance.answer(request("Latest fire detections in Stockton")))
+    assert "24 hours" in result.answer
+
+
+def test_missing_model_reply_can_reference_verified_horizon_and_numbered_steps(setup):
+    instance, _, _ = service(
+        setup,
+        final(
+            "Predictions are unavailable for the 7-day, 168-hour window on the 3 km grid.\n"
+            "1) No risk level can be assigned.\n"
+            "2) Model-specific explanations are unavailable. [fw-1]"
+        ),
+    )
+    result = run(instance.answer(request("Why is the predicted wildfire risk elevated?")))
+    assert "168-hour" in result.answer

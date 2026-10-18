@@ -112,6 +112,15 @@ class ChatTools:
         self.emergency = bool(
             re.search(r"evacuat|shelter|immediate danger|emergency|safe to", request.message, re.I)
         )
+        self.preparedness = bool(
+            re.search(r"prepar|if I (?:receive|get)|should I do if", request.message, re.I)
+        ) and not bool(
+            re.search(
+                r"current|active|right now|in effect|am I safe|immediate danger",
+                request.message,
+                re.I,
+            )
+        )
         self.needs_research = self.emergency or bool(
             re.search(
                 (
@@ -126,7 +135,11 @@ class ChatTools:
 
     def register(self, name, result):
         key = f"fw-{len(self.sources) + 1}"
-        valid = result.get("forecast_hour") or result.get("metadata", {}).get("observation_end")
+        valid = (
+            result.get("forecast_hour")
+            or result.get("observation_end")
+            or result.get("metadata", {}).get("observation_end")
+        )
         freshness = (
             result.get("cache_status")
             or result.get("metadata", {}).get("cache_status")
@@ -226,6 +239,7 @@ class ChatTools:
                 [(entry, freshness)] = await self.state.weather.get([point])
                 row = selected_hour(entry, hour)
                 result = row.model_dump(mode="json") | {
+                    "temperature_f": round(row.temperature_c * 9 / 5 + 32, 1),
                     "status": "available",
                     "source": "Open-Meteo",
                     "data_kind": "forecast",
@@ -253,11 +267,55 @@ class ChatTools:
                 )
                 return self.register(
                     name,
-                    data.model_dump(mode="json")
-                    | {
+                    {
                         "status": "available",
                         "source": "NASA FIRMS",
                         "not_confirmed_incidents": True,
+                        # Keep acquisition time separate from retrieval and coverage
+                        # metadata. A compact transport also avoids sending the full
+                        # GeoJSON/provider diagnostics to the paid model.
+                        **{
+                            key: data.metadata[key]
+                            for key in (
+                                "cache_status",
+                                "stale",
+                                "fetched_at",
+                                "requested_since",
+                                "requested_hours",
+                                "matched_count",
+                                "returned_count",
+                                "truncated",
+                                "partial_sources",
+                                "partial_time_coverage",
+                                "units",
+                            )
+                        },
+                        "observation_start": min(
+                            (f.properties["acquired_at"] for f in data.features), default=None
+                        ),
+                        "observation_end": max(
+                            (f.properties["acquired_at"] for f in data.features), default=None
+                        ),
+                        "observation_time_scope": "Acquisition range of returned observations",
+                        "query_bbox": list(bounds),
+                        "geographic_scope": "Location bounding box, not a distance-radius search",
+                        "detections": [
+                            {
+                                "coordinates": feature.geometry["coordinates"],
+                                **{
+                                    key: feature.properties[key]
+                                    for key in (
+                                        "id",
+                                        "acquired_at",
+                                        "product",
+                                        "satellite",
+                                        "confidence",
+                                        "frp_mw",
+                                    )
+                                },
+                            }
+                            for feature in data.features
+                        ],
                     },
                 )
             if name == "get_risk":
