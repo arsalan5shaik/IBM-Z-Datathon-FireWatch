@@ -23,7 +23,9 @@
   Actual OpenAI and hosted search remain BLOCKED: no API key configured.
 - s390x Python 3.11 wheels for SDK 2.54.0/jiter 0.17.0/pydantic-core 2.50.1 were
   verified downloadable; no LinuxONE execution claim. No public authenticated
-  backend deployment exists. PR/CI/merge/deployment pending final gates.
+  backend deployment exists. PR #11 is open at
+  https://github.com/arsalan5shaik/IBM-Z-Datathon-FireWatch/pull/11;
+  CI/merge/deployment pending final gates at this documentation checkpoint.
 
 ## Active feature: location-search
 

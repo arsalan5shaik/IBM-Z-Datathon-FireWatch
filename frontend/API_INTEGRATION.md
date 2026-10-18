@@ -59,7 +59,7 @@ satellite coverage. Cached detections remain satellite thermal anomalies, not co
 | GET /locations/{id}/boundary | Implemented by PR #8 | Selected Census boundary; /places aliases retained |
 | GET /fires/incidents?bbox | Not implemented | 404 means no official feed; no fictional incident names |
 | GET /explain/{cell_id}?hour | Planned/unavailable | No invented SHAP contributions |
-| POST /chat | Planned/unavailable | Labeled offline assistant grounded in loaded data |
+| POST /chat | Implemented; server-side OpenAI key and protected access required | Backend mode shows explicit errors; demo mode is labeled offline |
 
 In API mode, search and boundaries use `/locations/*`, serving the same Census data as the bundled
 local context index; explicit sample mode uses bundled files. No new geocoding service was introduced.
