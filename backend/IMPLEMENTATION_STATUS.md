@@ -1,5 +1,32 @@
 # Backend implementation status
 
+## Current feature: ai-chatbot
+
+- Branch `JS_feat/ai-chatbot`, isolated `firewatch-chat-worktree`; based on main
+  `b901d05`, then safely merged teammate FIRMS frontend PR #10/main `4d8d3f0` in
+  `ccd5926`. The sole CSS append conflict preserves both additions. No ML/FIRMS
+  implementation or shared working-tree changes were overwritten.
+- Pushed milestones `66b001c` (Responses SDK, exact prompt, validated tools,
+  citations, quotas/security), `aef67b7` (existing chat UI integration), `ccd5926`
+  (main integration). Configurable default gpt-5-mini; no model substitution.
+- Backend tools directly reuse location/weather/wind/FIRMS/forecast services;
+  real SHAP is explicitly unavailable. External research uses hosted web_search
+  with domain filters and executed-call/source/annotation validation. Emergency
+  answers never invent orders. Scope, timestamps, limits, errors and cancellation
+  are explicit. See CHATBOT.md for actual operational/integration limitations.
+- Final local verification: 354 backend tests PASS (including 69 chat cases),
+  62 frontend tests PASS, TypeScript/build PASS. Ruff lint/format and both existing
+  process/HTTP smoke modes PASS. See CHATBOT_VERIFICATION.md for commands/evidence.
+- Real Chrome: missing-key UI/refusal PASS; explicitly labeled model-stub test
+  over real Open-Meteo forecasts PASS for Stockton tomorrow, Sacramento wind,
+  sources, unavailable data, retry/clear, keyboard, outage recovery and mobile.
+  Actual OpenAI and hosted search remain BLOCKED: no API key configured.
+- s390x Python 3.11 wheels for SDK 2.54.0/jiter 0.17.0/pydantic-core 2.50.1 were
+  verified downloadable; no LinuxONE execution claim. No public authenticated
+  backend deployment exists. PR #11 is open at
+  https://github.com/arsalan5shaik/IBM-Z-Datathon-FireWatch/pull/11;
+  CI/merge/deployment pending final gates at this documentation checkpoint.
+
 ## Active feature: location-search
 
 - Branch: `JS_feat/location-search`, isolated `firewatch-location-worktree`, based

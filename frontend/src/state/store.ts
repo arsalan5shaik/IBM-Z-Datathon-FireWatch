@@ -6,6 +6,7 @@ import { loadJson, saveJson } from '../lib/storage';
 import { HOUR_MS, floorHour } from '../lib/time';
 import type {
   BasemapStyle,
+  ChatSource,
   CoverageCollection,
   DataOrigin,
   Detection,
@@ -40,6 +41,13 @@ export interface ChatMessage {
   grounding?: Grounding[];
   mode?: 'api' | 'offline' | 'error';
   at: number;
+  sources?: ChatSource[];
+  limitations?: string[];
+  suggested_questions?: string[];
+  context_label?: string;
+  context_key?: string;
+  retry_text?: string;
+  model?: string | null;
 }
 export interface ChatContext {
   label: string;

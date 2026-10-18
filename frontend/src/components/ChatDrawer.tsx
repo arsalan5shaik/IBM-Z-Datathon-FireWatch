@@ -2,17 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import { MapPin, RotateCcw, Send, Sparkles, X } from 'lucide-react';
 import { CHAT_MAX_CHARS, OFFICIAL_LINKS } from '../config';
 import { contextFor } from '../state/actions';
-import { chatMode, clearChat, clearChatContext, sendChat } from '../state/chat';
-import { setState, useStore } from '../state/store';
+import { chatMode, clearChat, clearChatContext, currentChatContext, sendChat } from '../state/chat';
+import { setState, useStore, validTimeOf } from '../state/store';
 import { formatStamp, parseTime } from '../lib/time';
 import { Markdown } from './ui';
+import { ChatSources, safeSourceUrl } from './chat/ChatSources';
 
 const DATASET_LABEL: Record<string, string> = { risk: 'Risk forecast', weather: 'Weather', fires: 'Satellite hotspots', incidents: 'Incidents' };
 
 function suggestions(hasContext: boolean): string[] {
   return hasContext
-    ? ['Why is the risk here what it is?', 'When is the peak risk this week?', 'How is wind affecting this area?', 'Are there active fires nearby?']
-    : ['Where is the highest risk right now?', 'What live fires are burning in California?', 'Why is Stockton high risk on Day 4?', 'How does the forecast model work?'];
+    ? ['What is the weather tomorrow?', 'How strong will the winds be tomorrow?', 'Why is this area at elevated wildfire risk?', 'Are there active wildfires nearby?']
+    : ['What are the California fire weather warnings?', 'What caused the Camp Fire?', 'How does FireWatch predict wildfire risk?', 'What wildfire data is available?'];
 }
 
 export function ChatButton() {
@@ -29,11 +30,13 @@ export function ChatDrawer() {
   const open = useStore((s) => s.chatOpen);
   const chat = useStore((s) => s.chat);
   const selection = useStore((s) => s.selection);
-  const riskOrigin = useStore((s) => s.risk.origin);
+  const place = useStore((s) => s.highlight?.place);
+  useStore(validTimeOf);
   const [text, setText] = useState('');
   const list = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
-  const mode = riskOrigin ? chatMode() : 'offline';
+  const mode = chatMode();
+  const context = currentChatContext();
 
   useEffect(() => {
     if (open) setTimeout(() => input.current?.focus(), 50);
@@ -45,7 +48,8 @@ export function ChatDrawer() {
   if (!open) return <ChatButton />;
 
   const ctxFromSelection = contextFor(selection);
-  const showUseSelection = ctxFromSelection && ctxFromSelection.label !== chat.context?.label;
+  const showUseSelection = ctxFromSelection && ['placeId', 'cellId', 'detectionId', 'incidentId', 'groupId'].some(key =>
+    ctxFromSelection[key as keyof typeof ctxFromSelection] !== context?.[key as keyof typeof ctxFromSelection]);
   const submit = (q?: string) => {
     const value = (q ?? text).trim();
     if (!value) return;
@@ -61,7 +65,7 @@ export function ChatDrawer() {
         </span>
         <div className="chat__titles">
           <h2>FireWatch AI</h2>
-          <span className={`chat__mode chat__mode--${mode}`}>{mode === 'api' ? 'Answers from FireWatch data' : 'Offline assistant · uses loaded data'}</span>
+          <span className={`chat__mode chat__mode--${mode}`}>{mode === 'api' ? 'Backend assistant · FireWatch + sourced research' : 'Demo/offline assistant · no online research'}</span>
         </div>
         {chat.messages.length > 0 && (
           <button type="button" className="icon-btn icon-btn--sm" aria-label="Start a new conversation" title="New conversation" onClick={clearChat}>
@@ -74,12 +78,12 @@ export function ChatDrawer() {
       </header>
 
       <div className="chat__context">
-        {chat.context ? (
+        {context ? (
           <span className="chip">
-            <MapPin size={13} /> {chat.context.label}
-            <button type="button" aria-label="Remove location context" onClick={clearChatContext}>
+            <MapPin size={13} /> {context.label}
+            {!place && <button type="button" aria-label="Remove location context" onClick={clearChatContext}>
               <X size={12} />
-            </button>
+            </button>}
           </span>
         ) : (
           <span className="chat__context-empty">No place selected — ask about California, or name a place.</span>
@@ -94,13 +98,18 @@ export function ChatDrawer() {
       <div className="chat__list" ref={list} aria-live="polite">
         {chat.messages.length === 0 && (
           <div className="chat__intro">
-            <p>Ask about live fires, the hourly 7-day risk forecast, wind, or why the model scores an area the way it does. Answers use FireWatch’s data only.</p>
+            <p>Ask about California wildfire activity, fire weather, risk or wildfire history. Available FireWatch data comes first; online answers require a configured backend and verified sources.</p>
           </div>
         )}
         {chat.messages.map((m) => (
           <div key={m.id} className={`msg msg--${m.role}${m.mode === 'error' ? ' msg--error' : ''}`}>
-            <div className="msg__bubble">{m.role === 'assistant' ? <Markdown text={m.content} /> : m.content}</div>
-            {m.grounding && m.grounding.length > 0 && (
+            {m.context_label && <div className="msg__context">{m.context_label}</div>}
+            <div className="msg__bubble">{m.role === 'assistant' ? <Markdown text={m.content} allowedLinks={(m.sources ?? []).map(safeSourceUrl).filter((url): url is string => !!url)} /> : m.content}</div>
+            {m.model && <div className="msg__context">Model: {m.model}</div>}
+            {m.sources?.length ? <ChatSources sources={m.sources} /> : null}
+            {m.limitations?.length ? <ul className="msg__limitations">{m.limitations.map((value, i) => <li key={i}>{value}</li>)}</ul> : null}
+            {m.retry_text && <button type="button" className="chip chip--ghost" disabled={chat.pending} onClick={() => void sendChat(m.retry_text!)}>Retry message</button>}
+            {!m.sources?.length && m.grounding && m.grounding.length > 0 && (
               <div className="msg__sources">
                 Sources:{' '}
                 {m.grounding
@@ -124,9 +133,9 @@ export function ChatDrawer() {
         )}
       </div>
 
-      {!chat.pending && chat.messages.length < 2 && (
+      {!chat.pending && (chat.messages.length < 2 || !!chat.messages.at(-1)?.suggested_questions?.length) && (
         <div className="chat__suggest">
-          {suggestions(!!chat.context).map((q) => (
+          {(chat.messages.at(-1)?.suggested_questions?.length ? chat.messages.at(-1)!.suggested_questions! : suggestions(!!context)).map((q) => (
             <button key={q} type="button" onClick={() => submit(q)}>
               {q}
             </button>
@@ -146,7 +155,7 @@ export function ChatDrawer() {
           rows={1}
           value={text}
           maxLength={CHAT_MAX_CHARS}
-          placeholder={chat.context ? `Ask about ${chat.context.label.split(' · ')[0]}…` : 'Ask about fires, risk, wind…'}
+          placeholder={context ? `Ask about ${context.label.split(' · ')[0]}…` : 'Ask about fires, risk, wind…'}
           aria-label="Message FireWatch AI"
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {

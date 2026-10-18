@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 
+from app.api.v1.chat import router as chat_router
 from app.api.v1.fires import router as fires_router
 from app.api.v1.forecasts import router as forecast_router
 from app.api.v1.locations import router as locations_router
@@ -24,6 +25,8 @@ from app.errors import (
 )
 from app.schemas.errors import ERROR_RESPONSES
 from app.schemas.status import RuntimeState
+from app.services.chat_access import ChatLimits
+from app.services.chat_service import ChatService
 from app.services.fire_cache import FireCache
 from app.services.forecast_store import ForecastStore
 from app.services.locations import LocationStore
@@ -52,6 +55,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         finally:
             app.state.runtime.ready = False
             await client.aclose()
+            await app.state.chat.close()
 
     app = FastAPI(
         title="FireWatch API",
@@ -70,6 +74,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.locations = LocationStore(settings.locations_data_dir)
     app.state.fires = FireCache(settings)
     app.state.weather = None
+    app.state.chat = ChatService(app.state)
+    app.state.chat_limits = ChatLimits(settings)
     app.add_exception_handler(APIError, api_error)
     app.add_exception_handler(HTTPException, http_error)
     app.add_exception_handler(RequestValidationError, validation_error)
@@ -89,4 +95,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(fires_router)
     app.include_router(weather_router)
     app.include_router(locations_router)
+    app.include_router(chat_router)
     return app

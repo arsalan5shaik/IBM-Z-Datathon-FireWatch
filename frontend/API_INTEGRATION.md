@@ -59,7 +59,7 @@ satellite coverage. Cached detections remain satellite thermal anomalies, not co
 | GET /locations/{id}/boundary | Implemented by PR #8 | Selected Census boundary; /places aliases retained |
 | GET /fires/incidents?bbox | Not implemented | 404 means no official feed; no fictional incident names |
 | GET /explain/{cell_id}?hour | Planned/unavailable | No invented SHAP contributions |
-| POST /chat | Planned/unavailable | Labeled offline assistant grounded in loaded data |
+| POST /chat | Implemented; server-side OpenAI key and protected access required | Backend mode shows explicit errors; demo mode is labeled offline |
 
 In API mode, search and boundaries use `/locations/*`, serving the same Census data as the bundled
 local context index; explicit sample mode uses bundled files. No new geocoding service was introduced.
@@ -133,3 +133,14 @@ See the PR checks for the synchronized backend suite and smoke results.
 The optional legacy location-browser script defaults to teammate-specific ports and assumes a usable forecast-hour control.
 It is not a readiness check while validated model forecasts are unavailable; current search/weather behavior was verified directly in the running app.
 The frontend integration is isolated on CO_feat/frontend-integration for review; check its PR validation before merging.
+# AI assistant update
+
+The existing drawer now calls `/chat` whenever an API URL is configured, including
+when risk artifacts are unavailable. Canonical body: `message,location_id,
+selected_hour,history`. It retains the map's location/hour, follows explicit
+named-location replies in conversation, cancels stale requests, and exposes
+retry/clear/loading/error states. API errors never silently become demo summaries.
+No browser OpenAI key or direct OpenAI requests exist. Explicit offline mode is
+labeled and performs no online research. Returned `sources` distinguish FireWatch
+data from verified external research and display real links/timestamps/freshness.
+Details, required authenticated public gateway, and live blockers: `backend/CHATBOT.md`.

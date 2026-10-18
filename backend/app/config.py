@@ -37,6 +37,20 @@ class Settings(BaseSettings):
     firms_max_rows: int = Field(default=50000, ge=1, le=100000)
     firms_boundary_path: Path = Path("frontend/public/data/ca-boundary.geojson")
     llm_api_key: SecretStr | None = Field(default=None, repr=False)
+    openai_api_key: SecretStr | None = Field(default=None, repr=False)
+    openai_model: str = Field(default="gpt-5-mini", min_length=1, max_length=100)
+    openai_timeout_seconds: float = Field(default=25, ge=1, le=60)
+    openai_max_output_tokens: int = Field(default=2500, ge=256, le=8000)
+    chat_max_history_messages: int = Field(default=10, ge=0, le=20)
+    chat_max_message_length: int = Field(default=2000, ge=1, le=8000)
+    chat_max_tool_calls: int = Field(default=8, ge=1, le=16)
+    chat_max_research_calls: int = Field(default=1, ge=0, le=3)
+    chat_timeout_seconds: float = Field(default=90, ge=5, le=180)
+    chat_rate_limit_per_minute: int = Field(default=6, ge=1, le=30)
+    chat_daily_request_limit: int = Field(default=100, ge=1, le=10000)
+    chat_max_concurrent_requests: int = Field(default=2, ge=1, le=8)
+    chat_access_mode: Literal["local", "trusted_proxy"] = "local"
+    chat_proxy_token: SecretStr | None = Field(default=None, repr=False)
     weather_provider: Literal["open-meteo"] = "open-meteo"
     forecast_hours: Literal[168] = 168
     grid_resolution_m: Literal[3000] = 3000
