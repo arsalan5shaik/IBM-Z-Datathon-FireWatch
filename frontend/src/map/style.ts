@@ -53,6 +53,9 @@ const reliefLayers = (): LayerSpecification[] => [
   },
 ];
 
+const WARM_CASINGS = new Set(['#e9ac77']);
+const WARM_FILLS = new Set(['#fc8', '#fea', '#fff4c6', '#ffdaa6']);
+
 function patchLiberty(base: StyleSpecification): StyleSpecification {
   const style = structuredClone(base);
   style.sources['fw-terrain-dem'] = demSource();
@@ -72,6 +75,15 @@ function patchLiberty(base: StyleSpecification): StyleSpecification {
       paint['fill-outline-color'] = 'rgba(120, 170, 110, 0.35)';
     }
     if (l.id === 'park_outline') paint['line-opacity'] = 0.4;
+    // Neutral roads: orange/yellow highways competed with the risk ramp and fire markers, so the
+    // only warm colours left on the map are FireWatch data.
+    if ((l as { 'source-layer'?: string })['source-layer'] === 'transportation' && l.type === 'line') {
+      const color = paint['line-color'];
+      if (l.id.endsWith('_casing') && typeof color === 'string' && WARM_CASINGS.has(color.toLowerCase())) paint['line-color'] = '#d3ccc1';
+      else if (l.id === 'road_motorway' || l.id === 'bridge_motorway' || l.id === 'tunnel_motorway')
+        paint['line-color'] = ['interpolate', ['linear'], ['zoom'], 5, '#cfc7bb', 8, '#ffffff'];
+      else if (typeof color === 'string' && WARM_FILLS.has(color.toLowerCase())) paint['line-color'] = '#fffdf9';
+    }
   }
   const b3d = style.layers.find((l) => l.id === 'building-3d');
   if (b3d) (b3d.layout ??= {} as never).visibility = 'none';

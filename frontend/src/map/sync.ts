@@ -77,7 +77,7 @@ export function startSync(map: MapLibreMap, markers: FireMarkers): () => void {
   const fader = new LayerFader(map, { riskOpacity: init.riskOpacity, lod: init.statewideView });
   const cellAnim = new RiskAnimator((id, st) => map.setFeatureState({ source: SRC.cells, id }, st));
   const coarseAnim = new RiskAnimator((id, st) => map.setFeatureState({ source: SRC.coarse, id }, st));
-  (window as unknown as { __fwRiskAnimator?: RiskAnimator }).__fwRiskAnimator = cellAnim;
+  if (import.meta.env.DEV) Object.assign(window as object, { __fwRiskAnimator: cellAnim, __fwFader: fader });
 
   void loadCaBoundary()
     .then((fc) => {
