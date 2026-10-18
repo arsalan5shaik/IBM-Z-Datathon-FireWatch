@@ -76,5 +76,5 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Build locked test environment
         run: docker buildx build --target test --load -f frontend/Dockerfile -t firewatch-frontend-test:ci .
-      - name: Frontend unit tests (existing failures remain visible)
+      - name: Frontend unit tests (API and demo contracts)
         run: docker run --rm --network none firewatch-frontend-test:ci

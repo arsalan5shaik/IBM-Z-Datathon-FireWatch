@@ -1,5 +1,69 @@
 # Docker / LinuxONE verification record
 
+## October 18 repair: current main integration
+
+PR #13 was synchronized by a normal merge of `origin/main` at
+`08198b5216c15d98d9d8c6f89f212ed450c62ce3` (merge commit `97ac544`), including merged
+PR #12 and PR #14. The feature worktree was clean first; the merge had no
+conflicts. Chatbot production code matches main; no model/dependency/threshold
+changes were introduced by this repair.
+
+Confirmed causes and targeted changes:
+
+- The two frontend failures reproduced after merging main (62 passed, 2 failed).
+  The SHAP test assumed demo log-odds even with an API configured. API mode already
+  correctly requires the model endpoint's declared output scale; the test now
+  asserts that safeguard explicitly. A separate demo test preserves the synthetic
+  model's existing log-odds explanation. No real ERC-G/SHAP contract was changed.
+- The sample-provider test imposed an unjustified >40% Low distribution and read
+  API-mode classification from its environment. It now explicitly selects demo
+  mode and verifies finite normalized scores, 168-hour shape, fixture/sample and
+  uncalibrated metadata, and illustrative demo category endpoints. Existing
+  `risk.integration.test.ts` separately verifies API scores remain unclassified.
+- Docker Desktop reproduced a separate sample-grid test timeout with default
+  Vitest concurrency. The same complete suite passed with two concurrent workers.
+  Only the frontend test-image command now bounds concurrency; no timeout,
+  assertion, prediction value or production build behavior was weakened.
+- The historical Windows failure was
+  `test_client_disconnect_cancels_model_work_and_releases_shared_lease`
+  (`39088105291`, 353 passed/1 failed). Its fixed 50 ms disconnect could happen
+  during weather preflight, before the mock model's cancellation handler existed.
+  Main's PR #14 already replaces that assumption with a model-start event and
+  checks the sole concurrency lease is released. That fix was preserved. An
+  additional event-driven regression disconnects during held provider preflight:
+  provider cancellation and lease cleanup must succeed while model calls remain
+  empty. No cancellation exception was suppressed and no sleep was added.
+- Compose smoke now explicitly checks that healthy processes can coexist with
+  FIRMS `unavailable`, `stale=true`, `credentials_missing`, and no success timestamp.
+  Heartbeat health is not presented as ingestion freshness. Existing FIRMS tests
+  also cover stale-cache retention after provider errors.
+
+Completed repair checks on the merged source:
+
+| Check | Actual result |
+|---|---|
+| Frontend dependency installation, typecheck, production build | PASS locally; Docker uses the same lock |
+| Frontend suite, host and Docker test image | 66 passed in each environment |
+| Full backend suite, Windows Python 3.11 | 445 passed, one upstream deprecation warning |
+| Full backend suite, amd64 Python 3.12 container | 445 passed, one identical warning |
+| Windows cancellation stress | 20 independent pytest processes; both phase-specific tests passed each time (40 cases) |
+| Backend Ruff lint and formatting | PASS on Windows and amd64; deployment helpers also pass |
+| FastAPI subprocess smoke, unavailable and fixture modes | PASS on Windows and amd64 |
+| Both runtime images, amd64 and s390x | Built successfully with the existing pinned bases and unchanged dependency locks |
+| Emulated s390x Node dependency/typecheck/production build | PASS with the existing CSS-minification fallback |
+| amd64 Compose lifecycle and provider-error/liveness distinction | PASS |
+| Runtime image layers, both architectures | PASS; no dotenv, local state or embedded credential environment values |
+
+The full s390x suite, Compose/browser rechecks and final CI outcomes are recorded
+with execution evidence in
+[PR #13](https://github.com/arsalan5shaik/IBM-Z-Datathon-FireWatch/pull/13).
+The original record below is historical: its test failures, artifact identities
+and archive describe the initial implementation and are not current release
+results. Native IBM LinuxONE deployment remains unverified; all local s390x
+execution uses QEMU. Paid public chat remains disabled by default.
+
+## Historical initial verification (October 17)
+
 Verified during October 17, 2026 America/Chicago (October 18 UTC). These results
 describe actual local builds and execution; no IBM LinuxONE host was supplied.
 

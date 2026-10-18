@@ -79,6 +79,10 @@ def main():
         assert not status["scheduler"]["enabled"]
         assert status["data_mode"] == "unavailable"
         assert status["providers"]["firms"]["status"] == "unavailable"
+        firms = status["providers"]["firms"]
+        assert firms["cache_status"] == "unavailable" and firms["stale"]
+        assert firms["last_error"] == "credentials_missing"
+        assert firms["last_success_at"] is None
         request("/api/v1/fires/live", 503)
         request("/api/v1/chat", 403, b"{}")
         request("/api/v1/chat/", 403, b"{}")
@@ -154,7 +158,8 @@ def main():
                     "runtime_arch": arch,
                     "providers": "no credentials; no paid/live calls",
                     "checks": "health, proxy, assets, SPA, chat denial, isolation, "
-                    "shared cache, SQLite, recreation persistence, graceful stop",
+                    "provider failure distinct from liveness, shared cache, SQLite, "
+                    "recreation persistence, graceful stop",
                 }
             )
         )

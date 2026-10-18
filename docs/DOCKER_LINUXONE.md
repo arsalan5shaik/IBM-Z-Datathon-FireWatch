@@ -384,6 +384,10 @@ and contract tests on s390x. Full s390x integration tests and an emulated native
 s390x frontend-tooling build run on manual dispatch: forecast publication tests
 perform many fsync operations and are substantially slower under QEMU.
 Frontend tests are a separate job; failures are not hidden by packaging success.
+The frontend test image limits Vitest to two concurrent workers to avoid CPU
+contention on Docker builders reporting many host CPUs. Test timeouts and
+assertions are unchanged. Tests explicitly separate demo behavior from API-mode
+classification/explanation safeguards.
 Changes touching runtime code trigger it on pull requests; manual dispatch is
 available. Read-only GitHub permissions, no provider credentials, no registry
 push, no `pull_request_target`, and a 20-minute container job limit keep the scope

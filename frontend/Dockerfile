@@ -11,7 +11,9 @@ RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 
 FROM sources AS test
-CMD ["npm", "test"]
+# Bound test concurrency on Docker Desktop/builders exposing many host CPUs.
+# Preserve the normal test timeout and all assertions.
+CMD ["npm", "test", "--", "--maxWorkers=2"]
 
 FROM sources AS build
 RUN npm run typecheck && npm run build -- --config vite.docker.config.ts
