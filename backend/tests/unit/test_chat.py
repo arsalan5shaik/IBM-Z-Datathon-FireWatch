@@ -868,3 +868,204 @@ def test_missing_model_reply_can_reference_verified_horizon_and_numbered_steps(s
     )
     result = run(instance.answer(request("Why is the predicted wildfire risk elevated?")))
     assert "168-hour" in result.answer
+
+
+def test_model_only_unavailable_answer_uses_one_model_response_no_extra_tools(setup):
+    instance, client, provider = service(
+        setup,
+        final(
+            "Predictions are unavailable; SHAP explanations are unavailable. [fw-1] [fw-2]",
+            ["fw-1", "fw-2"],
+        ),
+    )
+    result = run(
+        instance.answer(request("Why does FireWatch predict elevated wildfire risk here?"))
+    )
+    assert result.tools_used == ["get_risk", "get_shap"]
+    assert len(client.calls) == 1 and client.calls[0]["tools"] == []
+    assert provider.calls == 0
+    assert "speculate" in client.calls[0]["instructions"]
+
+
+def test_completed_preflight_tool_is_not_offered_again(setup):
+    instance, client, _ = service(setup, final())
+    run(instance.answer(request()))
+    assert "get_weather" not in {tool["name"] for tool in client.calls[0]["tools"]}
+
+
+@pytest.mark.parametrize(
+    "promise",
+    [
+        "I can refresh FIRMS now.",
+        "Would you like a radius search?",
+        "I can retrieve satellite imagery.",
+        "I can re-run SHAP for you.",
+    ],
+)
+def test_unsupported_capability_promises_fail_closed(setup, promise):
+    instance, _, _ = service(setup, final("Forecast temperature is 20 C. [fw-1] " + promise))
+    with pytest.raises(APIError) as error:
+        run(instance.answer(request()))
+    assert error.value.code == "chat_capability_unavailable"
+
+
+def test_followups_are_server_owned_supported_actions(setup):
+    payload = json.loads(final().output_text)
+    payload["suggested_questions"] = [
+        "Refresh FIRMS now",
+        "Show satellite imagery",
+        "Try a radius search",
+        "Generate SHAP wildfire data",
+    ]
+    instance, _, _ = service(setup, model_response(json.dumps(payload)))
+    result = run(instance.answer(request()))
+    assert result.suggested_questions == [
+        "What is the forecast weather at my selected location?",
+        "What is the wind forecast?",
+        "Show recent cached satellite detections in the selected area.",
+    ]
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "What does fire radiative power mean?",
+        "How does wind affect wildfire spread?",
+        "Where can I find official California wildfire incident updates?",
+    ],
+)
+def test_science_and_official_updates_research_before_model_memory(setup, question):
+    instance, client, _ = service(
+        setup,
+        model_response("Authoritative explanation.", web=True),
+        final("Verified wildfire science. [research-1-web-1]", ["research-1-web-1"]),
+    )
+    result = run(instance.answer(request(question)))
+    assert result.sources[-1].kind == "research"
+    assert client.calls[0]["tools"][0]["type"] == "web_search"
+
+
+@pytest.mark.parametrize("status,expected", [(503, 2), (429, 2), (401, 1)])
+def test_sdk_retry_is_bounded_and_auth_is_not_retried(setup, status, expected):
+    attempts = []
+
+    async def handler(req):
+        attempts.append(1)
+        return httpx.Response(
+            status, headers={"retry-after-ms": "1"}, json={"error": {"message": "fixture"}}
+        )
+
+    async def scenario():
+        wrapper = ResponsesClient(setup[0].state.settings)
+        wrapper.client = openai.AsyncOpenAI(
+            api_key="fixture",
+            max_retries=1,
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        )
+        try:
+            with pytest.raises(APIError):
+                await wrapper.create(input="California wildfire")
+        finally:
+            await wrapper.close()
+
+    run(scenario())
+    assert len(attempts) == expected
+
+
+def test_sdk_timeout_retry_has_only_two_attempts(setup):
+    attempts = []
+
+    async def handler(req):
+        attempts.append(1)
+        raise httpx.ReadTimeout("fixture timeout", request=req)
+
+    async def scenario():
+        wrapper = ResponsesClient(setup[0].state.settings)
+        wrapper.client = openai.AsyncOpenAI(
+            api_key="fixture",
+            max_retries=1,
+            http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        )
+        try:
+            with pytest.raises(APIError) as error:
+                await wrapper.create(input="California wildfire")
+            assert error.value.code == "chat_provider_timeout"
+        finally:
+            await wrapper.close()
+
+    run(scenario())
+    assert len(attempts) == 2
+
+
+def test_wall_clock_deadline_cancels_slow_model_without_application_retry(setup, monkeypatch):
+    real_timeout = asyncio.timeout
+    monkeypatch.setattr(
+        "app.services.openai_client.asyncio.timeout", lambda seconds: real_timeout(0.01)
+    )
+    stopped = []
+
+    async def slow(**kwargs):
+        try:
+            await asyncio.sleep(30)
+        finally:
+            stopped.append(True)
+
+    wrapper = ResponsesClient(setup[0].state.settings)
+    model = AsyncMock(side_effect=slow)
+    wrapper.client = SimpleNamespace(responses=SimpleNamespace(create=model))
+    with pytest.raises(APIError) as error:
+        run(wrapper.create(input="California wildfire"))
+    assert error.value.code == "chat_provider_timeout"
+    assert model.call_count == 1 and stopped == [True]
+
+
+def test_research_ignores_failed_action_but_keeps_completed_source_validation():
+    response = model_response("Verified official guidance.", web=True)
+    payload = response.output[0].model_dump(mode="json")
+    payload.update(id="ws_failed", status="failed")
+    response.output.insert(0, type(response.output[0]).model_validate(payload))
+    result = run(research(MockResponses(response), "California wildfire guidance", NOW))
+    assert result["partial_retrieval"] is True
+    assert result["sources"][0]["url"] == SOURCE_URL
+    response.output[1].action.sources = []
+    with pytest.raises(APIError) as error:
+        run(research(MockResponses(response), "California wildfire guidance", NOW))
+    assert error.value.code == "research_citation_invalid"
+
+
+def test_unavailable_models_do_not_turn_into_uncited_general_science(setup):
+    instance, _, _ = service(
+        setup, final("Predictions are unavailable. Wind and dry fuels are possible factors. [fw-1]")
+    )
+    result = run(instance.answer(request("What is the wildfire risk over the next seven days?")))
+    assert "Wind and dry fuels" not in result.answer
+    assert "cannot assign a risk level" in result.answer
+
+
+def test_inline_numbered_steps_are_formatting_not_risk_values(setup):
+    instance, _, _ = service(
+        setup,
+        final(
+            "Predictions are unavailable. Steps: 1) Ask about weather. "
+            "2) Read cached detections. [fw-1]"
+        ),
+    )
+    result = run(instance.answer(request("What is the wildfire risk?")))
+    assert "unavailable" in result.answer
+
+
+def test_conditional_evacuation_advice_is_not_current_order_check(setup):
+    instance, _, _ = service(
+        setup,
+        model_response("CAL FIRE preparedness guidance.", web=True),
+        final(
+            "If you receive an evacuation order, leave promptly following local authorities. "
+            "[research-1-web-1]",
+            ["research-1-web-1"],
+        ),
+    )
+    result = run(
+        instance.answer(request("What should I do if I receive a wildfire evacuation order?"))
+    )
+    assert "leave promptly" in result.answer
+    assert "cannot verify current evacuation orders" not in result.answer

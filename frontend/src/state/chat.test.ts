@@ -143,3 +143,11 @@ describe('FireWatch backend assistant', () => {
     expect(getState().chat.messages.length).toBeLessThanOrEqual(40);
   });
 });
+
+it('initial suggestions do not assume an unavailable elevated prediction', () => {
+  setState({ chatOpen: true });
+  const html = renderToStaticMarkup(createElement(ChatDrawer));
+  expect(html).toContain('Are wildfire predictions and explanations available?');
+  expect(html).toContain('Show recent cached satellite detections');
+  expect(html).not.toContain('Why is this area at elevated wildfire risk?');
+});

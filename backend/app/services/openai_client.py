@@ -1,8 +1,14 @@
 """Official SDK only; fixed OpenAI endpoint, no conversations stored remotely."""
 
+import asyncio
+import logging
+from time import perf_counter
+
 import openai
 
 from app.errors import APIError
+
+logger = logging.getLogger("firewatch.chat")
 
 
 class ResponsesClient:
@@ -24,14 +30,22 @@ class ResponsesClient:
                 timeout=self.settings.openai_timeout_seconds,
                 max_retries=1,
             )
+        started = perf_counter()
         try:
-            response = await self.client.responses.create(
-                model=self.settings.openai_model,
-                max_output_tokens=self.settings.openai_max_output_tokens,
-                store=False,
-                reasoning={"effort": "low"},
-                **kwargs,
-            )
+            # One SDK retry is allowed, with a wall-clock cap across both
+            # attempts/backoff (HTTPX timeouts alone are per I/O operation).
+            async with asyncio.timeout(
+                min(
+                    self.settings.openai_timeout_seconds * 2 + 1, self.settings.chat_timeout_seconds
+                )
+            ):
+                response = await self.client.responses.create(
+                    model=self.settings.openai_model,
+                    max_output_tokens=self.settings.openai_max_output_tokens,
+                    store=False,
+                    reasoning={"effort": "low"},
+                    **kwargs,
+                )
             if response.status != "completed":
                 raise APIError(
                     "chat_incomplete", "AI output was incomplete; try a shorter question", 502
@@ -45,7 +59,7 @@ class ResponsesClient:
             raise APIError(
                 "chat_provider_rate_limit", "OpenAI quota or rate limit reached; retry later", 429
             ) from None
-        except openai.APITimeoutError:
+        except (openai.APITimeoutError, TimeoutError):
             raise APIError(
                 "chat_provider_timeout", "OpenAI did not respond in time; retry later", 504
             ) from None
@@ -59,6 +73,16 @@ class ResponsesClient:
             raise APIError(
                 "chat_provider_unavailable", "OpenAI is temporarily unavailable", 503
             ) from None
+        finally:
+            logger.info(
+                "chat_model_response duration_ms=%d research=%s",
+                round((perf_counter() - started) * 1000),
+                any(t.get("type") == "web_search" for t in kwargs.get("tools", [])),
+                extra={
+                    "duration_ms": round((perf_counter() - started) * 1000),
+                    "research": any(t.get("type") == "web_search" for t in kwargs.get("tools", [])),
+                },
+            )
 
     async def close(self):
         if self.client is not None:

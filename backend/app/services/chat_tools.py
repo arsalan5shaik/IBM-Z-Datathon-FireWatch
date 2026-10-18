@@ -2,8 +2,10 @@
 
 import asyncio
 import json
+import logging
 import re
 from datetime import UTC, datetime, timedelta
+from time import perf_counter
 
 from pydantic import ValidationError
 
@@ -17,6 +19,8 @@ from app.services.jsonio import reject_constant, unique_pairs
 from app.services.locations import normalize as normalize_location
 from app.services.time import iso
 from app.services.weather_cache import hour_revision, sample_point, selected_hour
+
+logger = logging.getLogger("firewatch.chat")
 
 TOOL_MODELS = {
     "search_locations": SearchArgs,
@@ -127,6 +131,8 @@ class ChatTools:
                     "confirmed|active wildfires|camp "
                     "fire|histor|caused|warnings|policy|science|prepared|prevent|air "
                     "quality|smoke"
+                    "|radiative power|\\bfrp\\b|how.*wind.*(?:affect|spread)"
+                    "|official.*(?:incident|updates)"
                 ),
                 request.message,
                 re.I,
@@ -165,6 +171,22 @@ class ChatTools:
         return result | {"source_id": key}
 
     async def execute(self, name, arguments):
+        started = perf_counter()
+        try:
+            return await self._execute(name, arguments)
+        finally:
+            # Names only, never arguments, user messages, credentials or results.
+            logger.info(
+                "chat_tool_completed tool=%s duration_ms=%d",
+                name if name in TOOL_MODELS else "unsupported",
+                round((perf_counter() - started) * 1000),
+                extra={
+                    "tool": name if name in TOOL_MODELS else "unsupported",
+                    "duration_ms": round((perf_counter() - started) * 1000),
+                },
+            )
+
+    async def _execute(self, name, arguments):
         if len(self.used) >= self.settings.chat_max_tool_calls:
             raise APIError(
                 "chat_tool_limit", "Chat tool budget exhausted; ask a narrower question", 422
@@ -203,6 +225,10 @@ class ChatTools:
             self.research_calls += 1
             try:
                 result = await research(self.client, args.query, self.now, self.emergency)
+                if result.get("partial_retrieval"):
+                    self.limitations.append(
+                        "Some research actions failed; only completed retrievals support citations"
+                    )
                 registered = []
                 for item in result["sources"]:
                     source = ChatSource.model_validate(item)
